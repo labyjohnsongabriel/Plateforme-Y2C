@@ -1,0 +1,111 @@
+export const MESSAGES = {
+  // Success messages
+  SUCCESS: {
+    CREATED: 'Resource created successfully',
+    UPDATED: 'Resource updated successfully',
+    DELETED: 'Resource deleted successfully',
+    FOUND: 'Resource found',
+    LOGIN: 'Login successful',
+    LOGOUT: 'Logout successful',
+    REGISTER: 'Registration successful',
+    VERIFIED: 'Email verified successfully',
+    RESET_SENT: 'Password reset link sent',
+    RESET_COMPLETE: 'Password reset successfully',
+    UPLOADED: 'File uploaded successfully',
+    EXPORTED: 'Data exported successfully',
+    IMPORTED: 'Data imported successfully',
+    SENT: 'Message sent successfully',
+    APPROVED: 'Approved successfully',
+    REJECTED: 'Rejected successfully',
+  },
+
+  // Error messages
+  ERROR: {
+    NOT_FOUND: 'Resource not found',
+    UNAUTHORIZED: 'Unauthorized access',
+    FORBIDDEN: 'Forbidden access',
+    VALIDATION: 'Validation error',
+    INTERNAL: 'Internal server error',
+    DUPLICATE: 'Duplicate entry',
+    INVALID_CREDENTIALS: 'Invalid credentials',
+    INVALID_TOKEN: 'Invalid token',
+    EXPIRED_TOKEN: 'Token expired',
+    RATE_LIMIT: 'Too many requests, please try again later',
+    MISSING_FIELD: 'Missing required field',
+    INVALID_FORMAT: 'Invalid format',
+    ALREADY_EXISTS: 'Resource already exists',
+    IN_USE: 'Resource is in use',
+    DEPENDENCY: 'Dependency error',
+    TIMEOUT: 'Request timeout',
+    SERVICE_UNAVAILABLE: 'Service unavailable',
+    BAD_REQUEST: 'Bad request',
+    CONFLICT: 'Conflict',
+    UNPROCESSABLE: 'Unprocessable entity',
+    PAYMENT_REQUIRED: 'Payment required',
+    LOCKED: 'Resource locked',
+    FAILED_DEPENDENCY: 'Failed dependency',
+    PRECONDITION_FAILED: 'Precondition failed',
+    REQUEST_TIMEOUT: 'Request timeout',
+    TOO_MANY_REQUESTS: 'Too many requests',
+  },
+
+  // Validation messages
+  VALIDATION: {
+    REQUIRED: 'This field is required',
+    EMAIL: 'Please enter a valid email address',
+    PASSWORD: 'Password must be at least 8 characters with uppercase, lowercase, number and special character',
+    PHONE: 'Please enter a valid phone number',
+    URL: 'Please enter a valid URL',
+    NUMBER: 'Please enter a valid number',
+    INTEGER: 'Please enter a valid integer',
+    BOOLEAN: 'Please enter a boolean value',
+    DATE: 'Please enter a valid date',
+    ARRAY: 'Please enter an array',
+    OBJECT: 'Please enter an object',
+    MIN_LENGTH: (field: string, min: number) => `${field} must be at least ${min} characters`,
+    MAX_LENGTH: (field: string, max: number) => `${field} must be at most ${max} characters`,
+    MIN: (field: string, min: number) => `${field} must be at least ${min}`,
+    MAX: (field: string, max: number) => `${field} must be at most ${max}`,
+    ENUM: (field: string, values: string[]) => `${field} must be one of: ${values.join(', ')}`,
+    MATCH: (field: string, pattern: string) => `${field} must match the pattern: ${pattern}`,
+    UNIQUE: (field: string) => `${field} must be unique`,
+    EXISTS: (field: string) => `${field} must exist`,
+  },
+
+  // Auth messages
+  AUTH: {
+    LOGIN_SUCCESS: 'Login successful',
+    LOGIN_FAILED: 'Login failed',
+    LOGOUT_SUCCESS: 'Logout successful',
+    REGISTER_SUCCESS: 'Registration successful',
+    VERIFY_EMAIL: 'Please verify your email',
+    EMAIL_VERIFIED: 'Email verified successfully',
+    RESET_SENT: 'Password reset link sent to your email',
+    RESET_COMPLETE: 'Password reset successfully',
+    TOKEN_REFRESHED: 'Token refreshed successfully',
+    INVALID_CREDENTIALS: 'Invalid email or password',
+    ACCOUNT_LOCKED: 'Account locked',
+    ACCOUNT_DISABLED: 'Account disabled',
+    ACCOUNT_SUSPENDED: 'Account suspended',
+    ACCOUNT_PENDING: 'Account pending verification',
+  },
+
+  // Payment messages
+  PAYMENT: {
+    SUCCESS: 'Payment successful',
+    FAILED: 'Payment failed',
+    PENDING: 'Payment pending',
+    REFUNDED: 'Payment refunded',
+    PARTIAL: 'Partial payment',
+  },
+
+  // Notification messages
+  NOTIFICATION: {
+    SENT: 'Notification sent',
+    READ: 'Notification marked as read',
+    ALL_READ: 'All notifications marked as read',
+    DELETED: 'Notification deleted',
+  },
+};
+
+export type MessageKey = keyof typeof MESSAGES;

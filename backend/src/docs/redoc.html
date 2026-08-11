@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Youth Computing API - Documentation</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    }
+    #redoc-container {
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="redoc-container"></div>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js">
+  </script>
+  <script>
+    Redoc.init(
+      '/api/docs/swagger.json',
+      {
+        theme: {
+          colors: {
+            primary: {
+              main: '#010B40'
+            }
+          },
+          typography: {
+            fontSize: '14px',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+            headings: {
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+              fontWeight: '600'
+            }
+          },
+          sidebar: {
+            width: '260px',
+            backgroundColor: '#f7f9fc'
+          },
+          rightPanel: {
+            backgroundColor: '#010B40'
+          }
+        },
+        hideDownloadButton: true,
+        expandResponses: '200,201'
+      },
+      document.getElementById('redoc-container')
+    );
+  </script>
+</body>
+</html>

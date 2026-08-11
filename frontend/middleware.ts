@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
 
 // Routes publiques (accessibles sans authentification)
 const publicRoutes = [
@@ -30,7 +29,7 @@ const adminRoutes = [
   '/admin/parametres',
 ];
 
-export async function middleware(request: NextRequest) {
+export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Vérifier si la route est publique
@@ -43,38 +42,30 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith(route)
   );
 
-  // Si c'est une route admin, vérifier l'authentification
+  // Si c'est une route admin, rediriger vers login
   if (isAdminRoute) {
-    const token = await getToken({ 
-      req: request, 
-      secret: process.env.NEXTAUTH_SECRET 
-    });
+    // Vérification simple avec cookie
+    const token = request.cookies.get('auth-token');
     
     if (!token) {
       const url = new URL('/connexion', request.url);
       url.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(url);
     }
-
-    // Vérifier les rôles pour les routes admin spécifiques
-    const role = token.role as string;
-    const isSuperAdminRoute = pathname.startsWith('/admin/parametres') || 
-                             pathname.startsWith('/admin/utilisateurs');
-    
-    if (isSuperAdminRoute && role !== 'SUPER_ADMIN' && role !== 'ADMIN') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    }
   }
 
   // Si c'est une route d'authentification et que l'utilisateur est connecté
-  if ((pathname === '/connexion' || pathname === '/inscription') && 
-      await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })) {
-    return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+  if (pathname === '/connexion' || pathname === '/inscription') {
+    const token = request.cookies.get('auth-token');
+    if (token) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    }
   }
 
   return NextResponse.next();
 }
 
+// Configuration du middleware
 export const config = {
   matcher: [
     /*

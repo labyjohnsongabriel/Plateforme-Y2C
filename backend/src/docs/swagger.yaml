@@ -1,0 +1,211 @@
+openapi: 3.0.0
+info:
+  title: Youth Computing API
+  description: API pour la plateforme Youth Computing
+  version: 1.0.0
+  contact:
+    name: Youth Computing
+    email: contact@youthcomputing.mg
+  license:
+    name: Private
+    url: https://youthcomputing.mg
+
+servers:
+  - url: http://localhost:8000/api
+    description: Development server
+  - url: https://api.youthcomputing.mg/api
+    description: Production server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [SUPER_ADMIN, ADMIN, EDITOR, CONTRIBUTOR, VIEWER]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, SUSPENDED, PENDING]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Formation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        duration:
+          type: string
+        level:
+          type: string
+          enum: [DÉBUTANT, INTERMÉDIAIRE, AVANCÉ, EXPERT]
+        price:
+          type: number
+        category:
+          type: string
+        isPublished:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Registration:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, CONFIRMED, CANCELLED, COMPLETED, WAITING_LIST]
+        paymentStatus:
+          type: string
+          enum: [PENDING, PAID, FAILED, REFUNDED, PARTIAL]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            accessToken:
+              type: string
+            refreshToken:
+              type: string
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentification
+  - name: Users
+    description: Gestion des utilisateurs
+  - name: Formations
+    description: Gestion des formations
+  - name: Registrations
+    description: Gestion des inscriptions
+  - name: Y2C
+    description: Communauté Y2C
+  - name: Articles
+    description: Gestion des articles
+  - name: Projects
+    description: Gestion des projets
+  - name: Events
+    description: Gestion des événements
+  - name: Contact
+    description: Messages de contact
+  - name: Payments
+    description: Gestion des paiements
+  - name: Dashboard
+    description: Tableau de bord
+  - name: Stats
+    description: Statistiques
+  - name: Upload
+    description: Upload de fichiers
