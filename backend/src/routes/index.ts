@@ -1,3 +1,4 @@
+// src/routes/index.ts
 import { Router, Request, Response } from 'express';
 import authRoutes from './auth.routes';
 import userRoutes from './user.routes';
@@ -17,10 +18,11 @@ import dashboardRoutes from './dashboard.routes';
 import statsRoutes from './stats.routes';
 import exportRoutes from './export.routes';
 import uploadRoutes from './upload.routes';
+import notificationRoutes from './notification.routes';
 
 const router = Router();
 
-// Health check
+// ─── Health check ──────────────────────────────────────────────
 router.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
@@ -30,7 +32,7 @@ router.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// Root endpoint
+// ─── Root endpoint ──────────────────────────────────────────────
 router.get('/', (_req: Request, res: Response) => {
   res.json({
     name: 'Youth Computing API',
@@ -41,7 +43,9 @@ router.get('/', (_req: Request, res: Response) => {
   });
 });
 
-// API Documentation
+// ─── Documentation API ──────────────────────────────────────────
+// Tous les endpoints sont décrits sous forme de chaînes pour une
+// sérialisation JSON correcte.
 router.get('/docs', (_req: Request, res: Response) => {
   res.json({
     name: 'Youth Computing API',
@@ -70,6 +74,7 @@ router.get('/docs', (_req: Request, res: Response) => {
         changePassword: 'POST /api/users/change-password',
         toggleActive: 'PATCH /api/users/:id/toggle-active',
         stats: 'GET /api/users/stats',
+        uploadAvatar: 'POST /api/users/avatar',
       },
       formations: {
         list: 'GET /api/formations',
@@ -267,7 +272,7 @@ router.get('/docs', (_req: Request, res: Response) => {
   });
 });
 
-// Mount routes
+// ─── Montage des sous‑routeurs ─────────────────────────────────
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/formations', formationRoutes);
@@ -286,5 +291,6 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/stats', statsRoutes);
 router.use('/export', exportRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

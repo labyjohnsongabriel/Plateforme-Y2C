@@ -1,3 +1,5 @@
+// backend/src/services/recruitment.service.ts
+
 import { BaseService } from './base.service';
 import { RecruitmentRepository } from '../repositories/recruitment.repository';
 import { CandidatureRepository } from '../repositories/candidature.repository';
@@ -19,8 +21,10 @@ export class RecruitmentService extends BaseService<Recruitment, CreateRecruitme
     this.candidatureRepository = new CandidatureRepository();
   }
 
+  // ─── CREATE ────────────────────────────────────────────────
   async create(data: CreateRecruitmentDTO): Promise<Recruitment> {
-    const slug = await generateUniqueSlug(data.title, this.recruitmentRepository, 'slug');
+    // ✅ Correction : passer le nom du modèle 'recruitment'
+    const slug = await generateUniqueSlug(data.title, 'recruitment');
     return this.recruitmentRepository.create({
       ...data,
       slug,
@@ -28,15 +32,18 @@ export class RecruitmentService extends BaseService<Recruitment, CreateRecruitme
     });
   }
 
+  // ─── UPDATE ────────────────────────────────────────────────
   async update(id: string, data: UpdateRecruitmentDTO): Promise<Recruitment> {
     const recruitment = await this.recruitmentRepository.findByIdOrThrow(id);
     let slug = recruitment.slug;
     if (data.title && data.title !== recruitment.title) {
-      slug = await generateUniqueSlug(data.title, this.recruitmentRepository, 'slug');
+      // ✅ Correction : passer le nom du modèle 'recruitment'
+      slug = await generateUniqueSlug(data.title, 'recruitment');
     }
     return this.recruitmentRepository.update(id, { ...data, slug });
   }
 
+  // ─── AUTRES MÉTHODES ──────────────────────────────────────
   async getBySlug(slug: string): Promise<Recruitment | null> {
     return this.recruitmentRepository.findBySlug(slug);
   }
@@ -57,7 +64,7 @@ export class RecruitmentService extends BaseService<Recruitment, CreateRecruitme
     return { total, active, closed, byDepartment, totalCandidatures };
   }
 
-  // ============ CANDIDATURES ============
+  // ─── CANDIDATURES ──────────────────────────────────────────
   async applyForPosition(data: CreateCandidatureDTO): Promise<any> {
     const recruitment = await this.recruitmentRepository.findByIdOrThrow(data.recruitmentId);
 
@@ -77,10 +84,10 @@ export class RecruitmentService extends BaseService<Recruitment, CreateRecruitme
       throw ApiError.conflict('You have already applied for this position');
     }
 
-    // ✅ Correction : utiliser la relation Prisma
+    // ✅ Utilisation de la relation Prisma "Recruitment" (majuscule)
     const candidature = await this.candidatureRepository.create({
       ...data,
-      recruitment: {
+      Recruitment: {
         connect: { id: data.recruitmentId }
       }
     });

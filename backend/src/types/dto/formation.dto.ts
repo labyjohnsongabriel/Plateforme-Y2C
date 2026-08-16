@@ -34,15 +34,14 @@ export interface FormationSessionDTO {
   createdAt: Date;
   updatedAt: Date;
 }
-
 export interface CreateFormationDTO {
   title: string;
   description: string;
   objectives?: string;
   prerequisites?: string;
   duration: string;
-  level: FormationLevel;
-  price: number;
+  level: string;
+  price?: number;
   category: string;
   imageUrl?: string;
   isPublished?: boolean;

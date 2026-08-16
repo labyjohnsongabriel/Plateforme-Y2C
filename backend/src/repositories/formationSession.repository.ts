@@ -1,6 +1,8 @@
+// src/repositories/formation-session.repository.ts
+
 import { BaseRepository } from './base.repository';
 import { Prisma, FormationSession } from '@prisma/client';
-import { NotFoundException } from '../exceptions/not-found.exception';
+import { NotFoundException } from '../exceptions';
 
 export class FormationSessionRepository extends BaseRepository<
   FormationSession,
@@ -21,46 +23,21 @@ export class FormationSessionRepository extends BaseRepository<
 
   async findUpcomingSessions(limit: number = 10): Promise<FormationSession[]> {
     return this.findMany({
-      where: {
-        startDate: { gt: new Date() },
-        status: 'SCHEDULED',
-      },
+      where: { startDate: { gt: new Date() }, status: 'SCHEDULED' },
       orderBy: { startDate: 'asc' },
       take: limit,
     });
   }
 
-  async findActiveSessions(): Promise<FormationSession[]> {
-    return this.findMany({
-      where: {
-        status: 'SCHEDULED',
-        startDate: { lte: new Date() },
-        endDate: { gte: new Date() },
-      },
-      orderBy: { startDate: 'asc' },
-    });
-  }
-
   async updateParticipantsCount(id: string, increment: number = 1): Promise<FormationSession> {
     return this.execute(async () => {
-      const session = await this.model.findUnique({
-        where: { id },
-      });
-
-      if (!session) {
-        throw NotFoundException.resource('FormationSession', id);
-      }
-
+      const session = await this.model.findUnique({ where: { id } });
+      if (!session) throw NotFoundException.resource('FormationSession', id);
       const newCount = session.currentParticipants + increment;
-      if (newCount > session.maxParticipants) {
-        throw new Error('Session is full');
-      }
-
+      if (newCount > session.maxParticipants) throw new Error('Session is full');
       return await this.model.update({
         where: { id },
-        data: {
-          currentParticipants: newCount,
-        },
+        data: { currentParticipants: newCount },
       });
     });
   }
@@ -80,15 +57,9 @@ export class FormationSessionRepository extends BaseRepository<
       this.count({ status: 'COMPLETED' }),
       this.count({ status: 'CANCELLED' }),
     ]);
-
-    const result = await this.execute(async () => {
-      return await this.model.aggregate({
-        _sum: {
-          currentParticipants: true,
-        },
-      });
-    });
-
+    const result = await this.execute(async () =>
+      await this.model.aggregate({ _sum: { currentParticipants: true } })
+    );
     return {
       total,
       scheduled,
@@ -100,14 +71,11 @@ export class FormationSessionRepository extends BaseRepository<
   }
 
   async findWithRegistrations(id: string): Promise<FormationSession | null> {
-    return this.execute(async () => {
-      return await this.model.findUnique({
+    return this.execute(async () =>
+      await this.model.findUnique({
         where: { id },
-        include: {
-          registrations: true,
-          formation: true,
-        },
-      });
-    });
+        include: { registrations: true, formation: true },
+      })
+    );
   }
 }

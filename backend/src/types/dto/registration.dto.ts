@@ -1,6 +1,16 @@
-import { RegistrationStatus, PaymentStatus } from '../roles.enum';
-import { PaginationParams } from '../index';
+// backend/src/types/dto/registration.dto.ts
 
+import { RegistrationStatus, PaymentStatus } from '@prisma/client';
+
+// ============ PAGINATION ============
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+// ============ DTO PRINCIPAL ============
 export interface RegistrationDTO {
   id: string;
   sessionId: string;
@@ -26,9 +36,14 @@ export interface RegistrationDTO {
     startDate: Date;
     endDate: Date;
     location: string;
+    formation?: {
+      id: string;
+      title: string;
+    };
   };
 }
 
+// ============ CRÉATION ============
 export interface CreateRegistrationDTO {
   sessionId: string;
   formationId?: string;
@@ -37,8 +52,11 @@ export interface CreateRegistrationDTO {
   email: string;
   phone: string;
   motivation?: string;
+  paymentAmount?: number;
+  notes?: string;
 }
 
+// ============ MISE À JOUR ============
 export interface UpdateRegistrationDTO {
   firstName?: string;
   lastName?: string;
@@ -52,6 +70,7 @@ export interface UpdateRegistrationDTO {
   notes?: string;
 }
 
+// ============ FILTRES ============
 export interface RegistrationFilterParams extends PaginationParams {
   search?: string;
   status?: RegistrationStatus;
@@ -62,6 +81,7 @@ export interface RegistrationFilterParams extends PaginationParams {
   dateTo?: Date;
 }
 
+// ============ LISTE AVEC PAGINATION ============
 export interface RegistrationListDTO {
   registrations: RegistrationDTO[];
   pagination: {
@@ -72,6 +92,7 @@ export interface RegistrationListDTO {
   };
 }
 
+// ============ STATISTIQUES ============
 export interface RegistrationStatsDTO {
   total: number;
   pending: number;
@@ -92,6 +113,7 @@ export interface RegistrationStatsDTO {
   };
 }
 
+// ============ EXPORT ============
 export interface RegistrationExportDTO {
   id: string;
   firstName: string;
@@ -106,6 +128,7 @@ export interface RegistrationExportDTO {
   registeredAt: Date;
 }
 
+// ============ BULK ============
 export interface BulkRegistrationDTO {
   registrations: CreateRegistrationDTO[];
 }

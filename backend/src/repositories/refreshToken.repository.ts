@@ -1,3 +1,4 @@
+// src/repositories/refreshToken.repository.ts
 import { BaseRepository } from './base.repository';
 import { Prisma, RefreshToken } from '@prisma/client';
 
@@ -12,17 +13,17 @@ export class RefreshTokenRepository extends BaseRepository<
   }
 
   async findValidToken(token: string, userId: string): Promise<RefreshToken | null> {
+    // ✅ Correction : findFirst attend directement le where
     return this.findFirst({
-      where: {
-        token,
-        userId,
-        isRevoked: false,
-        expiresAt: { gt: new Date() },
-      },
+      token,
+      userId,
+      isRevoked: false,
+      expiresAt: { gt: new Date() },
     });
   }
 
   async findValidTokensByUser(userId: string): Promise<RefreshToken[]> {
+    // ✅ findMany accepte un objet avec where (c'est correct)
     return this.findMany({
       where: {
         userId,

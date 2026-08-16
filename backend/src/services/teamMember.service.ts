@@ -1,3 +1,5 @@
+// backend/src/services/teamMember.service.ts
+
 import { BaseService } from './base.service';
 import { TeamMemberRepository } from '../repositories/teamMember.repository';
 import { UserRepository } from '../repositories/user.repository';
@@ -22,12 +24,12 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
       throw ApiError.conflict('User is already a team member');
     }
     const displayOrder = data.displayOrder || 0;
-    // ✅ Utilisation de la relation Prisma
+    // ✅ Correction : utiliser "User" (majuscule) au lieu de "user"
     return this.teamMemberRepository.create({
       ...data,
       displayOrder,
       isActive: data.isActive !== undefined ? data.isActive : true,
-      user: {
+      User: {
         connect: { id: data.userId }
       }
     });
@@ -40,8 +42,9 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
   async getActiveMembers(): Promise<TeamMember[]> {
     return this.teamMemberRepository.findMany({
       where: { isActive: true },
+      // ✅ Correction : "User" au lieu de "user"
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -58,8 +61,9 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
   async getByDepartment(department: string): Promise<TeamMember[]> {
     return this.teamMemberRepository.findMany({
       where: { department, isActive: true },
+      // ✅ Correction : "User" au lieu de "user"
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             firstName: true,
@@ -95,17 +99,18 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
     return { total, active, inactive, byDepartment };
   }
 
-  toDTO(member: TeamMember & { user?: any }): any {
+  // ✅ Correction : l'objet inclus est "User" (majuscule)
+  toDTO(member: TeamMember & { User?: any }): any {
     return {
       id: member.id,
       userId: member.userId,
-      user: member.user ? {
-        id: member.user.id,
-        firstName: member.user.firstName,
-        lastName: member.user.lastName,
-        fullName: `${member.user.firstName} ${member.user.lastName}`,
-        email: member.user.email,
-        avatar: member.user.avatar,
+      user: member.User ? {
+        id: member.User.id,
+        firstName: member.User.firstName,
+        lastName: member.User.lastName,
+        fullName: `${member.User.firstName} ${member.User.lastName}`,
+        email: member.User.email,
+        avatar: member.User.avatar,
       } : undefined,
       role: member.role,
       department: member.department,

@@ -1,4 +1,5 @@
-import { body } from 'express-validator';
+// src/validators/auth.validator.ts
+import { body, header } from 'express-validator'; // ✅ Import header ajouté
 
 export const registerValidator = [
   body('email')
@@ -46,10 +47,23 @@ export const loginValidator = [
     .withMessage('Password is required'),
 ];
 
+// ✅ UNIQUE déclaration de refreshTokenValidator avec support body + header
 export const refreshTokenValidator = [
+  // Le token peut être dans le body
   body('refreshToken')
+    .optional()
     .notEmpty()
-    .withMessage('Refresh token is required'),
+    .withMessage('Refresh token cannot be empty in body'),
+  
+  // Ou dans le header Authorization
+  header('authorization')
+    .optional()
+    .custom((value: string) => { // ✅ typage explicite
+      if (value && !value.startsWith('Bearer ')) {
+        throw new Error('Authorization header must start with Bearer');
+      }
+      return true;
+    }),
 ];
 
 export const verifyEmailValidator = [

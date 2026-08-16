@@ -12,6 +12,7 @@ export class Y2CController extends BaseController {
   }
 
   // ============ MEMBERS ============
+
   getMembers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
@@ -81,7 +82,35 @@ export class Y2CController extends BaseController {
     }
   };
 
+  // ============ BADGE GENERATION ============
+
+  /**
+   * Génère un badge pour un membre spécifique
+   */
+  generateBadgeForMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const member = await this.y2cService.generateBadgeForMember(id);
+      this.sendSuccess(res, member);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  /**
+   * Génère des badges pour tous les membres qui n'en ont pas
+   */
+  generateBadges = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.y2cService.generateBadges();
+      this.sendSuccess(res, result);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
   // ============ EVENTS ============
+
   getEvents = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);

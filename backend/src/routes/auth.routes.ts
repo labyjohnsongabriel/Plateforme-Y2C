@@ -1,6 +1,8 @@
+// src/routes/auth.routes.ts
 import { Router, Request, Response, NextFunction } from 'express';
 import { AuthController } from '../controllers/auth.controller';
 import { validate } from '../middlewares/validate.middleware';
+import { authenticate } from '../middlewares/auth.middleware'; // ← maintenant exporté
 import {
   registerValidator,
   loginValidator,
@@ -13,24 +15,11 @@ import {
 const router = Router();
 const authController = new AuthController();
 
-// Helper pour wrapper les contrôleurs
+// Helper pour wrapper les contrôleurs (gestion d'erreurs)
 const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<void>) => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
-};
-
-// Middleware d'authentification simplifié
-const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Simulation d'authentification pour le test
-  (req as any).user = {
-    id: 'user-1',
-    email: 'admin@youthcomputing.mg',
-    role: 'SUPER_ADMIN',
-    firstName: 'Admin',
-    lastName: 'User',
-  };
-  next();
 };
 
 // Routes publiques
@@ -42,7 +31,7 @@ router.post('/forgot-password', validate(forgotPasswordValidator), asyncHandler(
 router.post('/reset-password', validate(resetPasswordValidator), asyncHandler(authController.resetPassword));
 
 // Routes protégées
-router.post('/logout', authMiddleware, asyncHandler(authController.logout));
-router.get('/me', authMiddleware, asyncHandler(authController.getMe));
+router.post('/logout', authenticate, asyncHandler(authController.logout));
+router.get('/me', authenticate, asyncHandler(authController.getMe));
 
 export default router;

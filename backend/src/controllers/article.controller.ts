@@ -11,30 +11,52 @@ export class ArticleController extends BaseController {
     this.articleService = new ArticleService();
   }
 
+  /**
+   * Récupère tous les articles (avec pagination)
+   */
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const pagination = this.getPaginationParams(req);
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 10;
       const search = req.query.search as string;
-      
-      let articles;
+
+      let result;
       if (search) {
-        // ✅ Utilise la méthode searchArticles maintenant disponible
-        articles = await this.articleService.searchArticles(search);
+        const articles = await this.articleService.searchArticles(search);
+        result = {
+          data: articles,
+          pagination: {
+            page: 1,
+            limit: articles.length,
+            total: articles.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
       } else {
-        articles = await this.articleService.findAll(pagination);
+        result = await this.articleService.findAllPaginated(page, limit);
       }
-      
-      this.sendSuccess(res, articles);
+
+      // On renvoie un objet avec data et pagination dans le body
+      this.sendSuccess(res, result);
     } catch (error) {
       this.handleError(next, error);
     }
   };
 
+  /**
+   * Récupère les articles publiés (paginés)
+   */
   getPublished = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const pagination = this.getPaginationParams(req);
-      const articles = await this.articleService.getPublishedArticles(pagination);
-      this.sendSuccess(res, articles);
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 10;
+
+      const result = await this.articleService.getPublishedArticlesPaginated(page, limit);
+
+      // On renvoie un objet avec data et pagination
+      this.sendSuccess(res, result);
     } catch (error) {
       this.handleError(next, error);
     }
@@ -44,11 +66,11 @@ export class ArticleController extends BaseController {
     try {
       const { slug } = req.params;
       const article = await this.articleService.getBySlug(slug);
-      
+
       if (!article) {
         throw new Error('Article not found');
       }
-      
+
       await this.articleService.incrementViews(article.id);
       this.sendSuccess(res, article);
     } catch (error) {
@@ -66,7 +88,6 @@ export class ArticleController extends BaseController {
     }
   };
 
-  // ✅ Correction : utilisation directe de req.user.id
   create = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.user?.id;
@@ -131,7 +152,7 @@ export class ArticleController extends BaseController {
 
   getMostViewed = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const limit = parseInt(req.query.limit as string) || 5;
+      const limit = parseInt(req.query.limit as string, 10) || 5;
       const articles = await this.articleService.getMostViewed(limit);
       this.sendSuccess(res, articles);
     } catch (error) {
@@ -139,7 +160,8 @@ export class ArticleController extends BaseController {
     }
   };
 
-  // ============ COMMENTS ============
+  // ============ COMMENTAIRES ============
+
   createComment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const comment = await this.articleService.createComment(req.body);
@@ -179,3 +201,4 @@ export class ArticleController extends BaseController {
     }
   };
 }
+

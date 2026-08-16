@@ -99,290 +99,109 @@ enum ActivityType {
 
 // ============ MODELS ============
 
-model User {
-  id            String          @id @default(cuid())
-  email         String          @unique
-  password_hash String
-  firstName     String
-  lastName      String
-  role          Role            @default(VIEWER)
-  status        UserStatus      @default(PENDING)
-  phone         String?
-  avatar        String?
-  bio           String?
-  isActive      Boolean         @default(true)
-  lastLogin     DateTime?
-  emailVerified DateTime?
-
-  // Relations
-  articles      Article[]
-  projects      Project[]       @relation("UserProjects")
-  teamMember    TeamMember?
-  notifications Notification[]
-  activityLogs  ActivityLog[]
-  refreshTokens RefreshToken[]
-  evaluations   Evaluation[]
-
-  // ✅ Relation inverse pour File
-  files         File[]
-
-  // Timestamps
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-}
-
-model RefreshToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  isRevoked Boolean  @default(false)
-  createdAt DateTime @default(now())
-}
-
-// ============ FILE ============
-
-model File {
-  id         String   @id @default(cuid())
-  name       String
-  mimeType   String
-  size       Int
-  url        String
-  publicId   String   @unique
-  format     String?
-  width      Int?
-  height     Int?
+model ActivityLog {
+  id         String       @id @default(cuid())
   userId     String
-  folder     String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  action     ActivityType
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime     @default(now())
+  User       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("activity_logs")
 }
-
-// ============ FORMATION & SESSIONS ============
-
-model Formation {
-  id                String              @id @default(cuid())
-  title             String
-  slug              String              @unique
-  description       String
-  objectives        String?
-  prerequisites     String?
-  duration          String
-  level             String
-  price             Float?
-  category          String
-  imageUrl          String?
-  isPublished       Boolean             @default(false)
-  maxParticipants   Int?
-
-  // Relations
-  sessions          FormationSession[]
-  registrations     Registration[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-model FormationSession {
-  id              String              @id @default(cuid())
-  formationId     String
-  formation       Formation           @relation(fields: [formationId], references: [id], onDelete: Cascade)
-  startDate       DateTime
-  endDate         DateTime
-  location        String
-  maxParticipants Int
-  currentParticipants Int             @default(0)
-  status          String              @default("SCHEDULED")
-  price           Float?
-
-  // Relations
-  registrations   Registration[]
-
-  // Timestamps
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-}
-
-// ============ REGISTRATION ============
-
-model Registration {
-  id                String              @id @default(cuid())
-  sessionId         String
-  session           FormationSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  formationId       String?
-  formation         Formation?          @relation(fields: [formationId], references: [id])
-  firstName         String
-  lastName          String
-  email             String
-  phone             String
-  motivation        String?
-  status            RegistrationStatus  @default(PENDING)
-  paymentStatus     PaymentStatus       @default(PENDING)
-  paymentAmount     Float?
-  paymentReference  String?
-  notes             String?
-
-  // Relations
-  payments          Payment[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ Y2C MEMBER ============
-
-model Y2CMember {
-  id                String              @id @default(cuid())
-  name              String
-  email             String              @unique
-  phone             String
-  studentId         String?
-  institution       String?
-  membershipFeePaid Float?
-  badgeNumber       String              @unique
-  status            Y2CMemberStatus     @default(PENDING)
-  joinedAt          DateTime            @default(now())
-  expiresAt         DateTime?
-
-  // Relations
-  payments          Payment[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ Y2C EVENT ============
-
-model Y2CEvent {
-  id                String              @id @default(cuid())
-  title             String
-  description       String
-  eventType         EventType
-  startDate         DateTime
-  endDate           DateTime
-  location          String
-  maxParticipants   Int?
-  isPaid            Boolean             @default(false)
-  price             Float?
-  imageUrl          String?
-  isPublished       Boolean             @default(false)
-
-  // Relations
-  registrations     Y2CEventRegistration[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-model Y2CEventRegistration {
-  id                String              @id @default(cuid())
-  eventId           String
-  event             Y2CEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  name              String
-  email             String
-  phone             String
-  studentId         String?
-  institution       String?
-  status            String              @default("PENDING")
-  attended          Boolean             @default(false)
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ ARTICLE ============
 
 model Article {
-  id                String              @id @default(cuid())
-  title             String
-  slug              String              @unique
-  content           String
-  excerpt           String?
-  featuredImage     String?
-  authorId          String
-  author            User                @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  category          String
-  tags              String[]
-  status            ArticleStatus       @default(DRAFT)
-  publishedAt       DateTime?
-  views             Int                 @default(0)
-  isFeatured        Boolean             @default(false)
+  id             String           @id @default(cuid())
+  title          String
+  slug           String           @unique
+  content        String
+  excerpt        String?
+  featuredImage  String?
+  authorId       String
+  category       String
+  tags           String[]
+  status         ArticleStatus    @default(DRAFT)
+  publishedAt    DateTime?
+  views          Int              @default(0)
+  isFeatured     Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  User           User             @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  ArticleComment ArticleComment[]
 
-  // Relations
-  comments          ArticleComment[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("articles")
 }
 
 model ArticleComment {
-  id                String              @id @default(cuid())
-  articleId         String
-  article           Article             @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  authorName        String
-  authorEmail       String
-  content           String
-  isApproved        Boolean             @default(false)
-  parentId          String?
-  parent            ArticleComment?     @relation("CommentReplies", fields: [parentId], references: [id])
-  replies           ArticleComment[]    @relation("CommentReplies")
+  id                   String           @id @default(cuid())
+  articleId            String
+  authorName           String
+  authorEmail          String
+  content              String
+  isApproved           Boolean          @default(false)
+  parentId             String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  Article              Article          @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  ArticleComment       ArticleComment?  @relation("ArticleCommentToArticleComment", fields: [parentId], references: [id])
+  other_ArticleComment ArticleComment[] @relation("ArticleCommentToArticleComment")
 
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("article_comments")
 }
 
-// ============ PROJECT ============
+model Candidature {
+  id            String       @id @default(cuid())
+  recruitmentId String
+  fullName      String
+  email         String
+  phone         String
+  cvUrl         String
+  coverLetter   String?
+  status        String       @default("PENDING")
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  Recruitment   Recruitment  @relation(fields: [recruitmentId], references: [id], onDelete: Cascade)
+  Evaluation    Evaluation[]
+  Interview     Interview[]
 
-model Project {
-  id                String              @id @default(cuid())
-  title             String
-  slug              String              @unique
-  description       String
-  objectives        String?
-  impact            String?
-  technologies      String[]
-  images            String[]
-  year              Int
-  category          String
-  isFeatured        Boolean             @default(false)
-  status            ProjectStatus       @default(PLANNING)
-  client            String?
-  projectUrl        String?
-  githubUrl         String?
-
-  // Relations
-  metrics           ProjectMetric[]
-  users             User[]              @relation("UserProjects")
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("candidatures")
 }
 
-model ProjectMetric {
-  id                String              @id @default(cuid())
-  projectId         String
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  metricKey         String
-  metricValue       String
-  description       String?
+model ContactMessage {
+  id           String    @id @default(cuid())
+  name         String
+  email        String
+  subject      String
+  message      String
+  isRead       Boolean   @default(false)
+  repliedAt    DateTime?
+  repliedBy    String?
+  replyContent String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("contact_messages")
 }
 
-// ============ EVENT ============
+model Evaluation {
+  id            String      @id @default(cuid())
+  candidatureId String
+  evaluatorId   String
+  criteria      String
+  score         Int
+  comments      String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  Candidature   Candidature @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
+  User          User        @relation(fields: [evaluatorId], references: [id], onDelete: SetNull)
+
+  @@map("evaluations")
+}
 
 model Event {
   id                String              @id @default(cuid())
@@ -399,204 +218,335 @@ model Event {
   price             Float?
   imageUrl          String?
   isPublished       Boolean             @default(false)
-
-  // Relations
-  registrations     EventRegistration[]
-
-  // Timestamps
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
+  EventRegistration EventRegistration[]
+
+  @@map("events")
 }
 
 model EventRegistration {
-  id                String              @id @default(cuid())
-  eventId           String
-  event             Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  name              String
-  email             String
-  phone             String
-  status            String              @default("PENDING")
-  attended          Boolean             @default(false)
+  id        String   @id @default(cuid())
+  eventId   String
+  name      String
+  email     String
+  phone     String
+  status    String   @default("PENDING")
+  attended  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("event_registrations")
 }
 
-// ============ TEAM MEMBER ============
+model File {
+  id        String   @id @default(cuid())
+  name      String
+  mimeType  String
+  size      Int
+  url       String
+  publicId  String   @unique
+  format    String?
+  width     Int?
+  height    Int?
+  userId    String
+  folder    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-model TeamMember {
-  id                String              @id @default(cuid())
-  userId            String              @unique
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role              String
-  department        String
-  bio               String?
-  photoUrl          String?
-  linkedin          String?
-  displayOrder      Int                 @default(0)
-  isActive          Boolean             @default(true)
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("files")
 }
 
-// ============ CONTACT MESSAGE ============
+model Formation {
+  id               String             @id @default(cuid())
+  title            String
+  slug             String             @unique
+  description      String
+  objectives       String?
+  prerequisites    String?
+  duration         String
+  level            String
+  price            Float?
+  category         String
+  imageUrl         String?
+  isPublished      Boolean            @default(false)
+  maxParticipants  Int?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  FormationSession FormationSession[]
+  Registration     Registration[]
 
-model ContactMessage {
-  id                String              @id @default(cuid())
-  name              String
-  email             String
-  subject           String
-  message           String
-  isRead            Boolean             @default(false)
-  repliedAt         DateTime?
-  repliedBy         String?
-  replyContent      String?
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("formations")
 }
 
-// ============ PAYMENT ============
+model FormationSession {
+  id                  String         @id @default(cuid())
+  formationId         String
+  startDate           DateTime
+  endDate             DateTime
+  location            String
+  maxParticipants     Int
+  currentParticipants Int            @default(0)
+  status              String         @default("SCHEDULED")
+  price               Float?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  Formation           Formation      @relation(fields: [formationId], references: [id], onDelete: Cascade)
+  Registration        Registration[]
 
-model Payment {
-  id                String              @id @default(cuid())
-  registrationId    String?
-  registration      Registration?       @relation(fields: [registrationId], references: [id])
-  y2cMemberId       String?
-  y2cMember         Y2CMember?          @relation(fields: [y2cMemberId], references: [id])
-  amount            Float
-  currency          String              @default("MGA")
-  paymentMethod     String
-  paymentReference  String
-  status            PaymentStatus       @default(PENDING)
-  metadata          Json?
-  paidAt            DateTime?
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ NOTIFICATION ============
-
-model Notification {
-  id                String              @id @default(cuid())
-  userId            String
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type              NotificationType
-  title             String
-  message           String
-  link              String?
-  isRead            Boolean             @default(false)
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ ACTIVITY LOG ============
-
-model ActivityLog {
-  id                String              @id @default(cuid())
-  userId            String
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  action            ActivityType
-  resource          String
-  resourceId        String?
-  ipAddress         String?
-  userAgent         String?
-  metadata          Json?
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-}
-
-// ============ PARTNER ============
-
-model Partner {
-  id                String              @id @default(cuid())
-  name              String
-  logo              String?
-  website           String?
-  description       String?
-  isActive          Boolean             @default(true)
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-// ============ RECRUITMENT & CANDIDATURES ============
-
-model Recruitment {
-  id                String              @id @default(cuid())
-  title             String
-  slug              String              @unique
-  description       String
-  requirements      String
-  department        String
-  position          String
-  isActive          Boolean             @default(true)
-  deadline          DateTime?
-
-  // Relations
-  candidatures      Candidature[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-}
-
-model Candidature {
-  id                String              @id @default(cuid())
-  recruitmentId     String
-  recruitment       Recruitment         @relation(fields: [recruitmentId], references: [id], onDelete: Cascade)
-  fullName          String
-  email             String
-  phone             String
-  cvUrl             String
-  coverLetter       String?
-  status            String              @default("PENDING")
-  notes             String?
-
-  // Relations
-  interviews        Interview[]
-  evaluations       Evaluation[]
-
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("formation_sessions")
 }
 
 model Interview {
-  id                String              @id @default(cuid())
-  candidatureId     String
-  candidature       Candidature         @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
-  scheduledAt       DateTime
-  interviewer       String
-  notes             String?
-  status            String              @default("SCHEDULED")
+  id            String      @id @default(cuid())
+  candidatureId String
+  scheduledAt   DateTime
+  interviewer   String
+  notes         String?
+  status        String      @default("SCHEDULED")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  Candidature   Candidature @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
 
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("interviews")
 }
 
-model Evaluation {
-  id                String              @id @default(cuid())
-  candidatureId     String
-  candidature       Candidature         @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
-  evaluatorId       String
-  evaluator         User                @relation(fields: [evaluatorId], references: [id], onDelete: SetNull)
-  criteria          String
-  score             Int
-  comments          String?
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  User      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Timestamps
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  @@map("notifications")
+}
+
+model Partner {
+  id          String   @id @default(cuid())
+  name        String
+  logo        String?
+  website     String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("partners")
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  registrationId   String?
+  y2cMemberId      String?
+  amount           Float
+  currency         String        @default("MGA")
+  paymentMethod    String
+  paymentReference String
+  status           PaymentStatus @default(PENDING)
+  metadata         Json?
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  Registration     Registration? @relation(fields: [registrationId], references: [id])
+  Y2CMember        Y2CMember?    @relation(fields: [y2cMemberId], references: [id])
+
+  @@map("payments")
+}
+
+model Project {
+  id            String          @id @default(cuid())
+  title         String
+  slug          String          @unique
+  description   String
+  objectives    String?
+  impact        String?
+  technologies  String[]
+  images        String[]
+  year          Int
+  category      String
+  isFeatured    Boolean         @default(false)
+  status        ProjectStatus   @default(PLANNING)
+  client        String?
+  projectUrl    String?
+  githubUrl     String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  ProjectMetric ProjectMetric[]
+  User          User[]          @relation("UserProjects")
+
+  @@map("projects")
+}
+
+model ProjectMetric {
+  id          String   @id @default(cuid())
+  projectId   String
+  metricKey   String
+  metricValue String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_metrics")
+}
+
+model Recruitment {
+  id           String        @id @default(cuid())
+  title        String
+  slug         String        @unique
+  description  String
+  requirements String
+  department   String
+  position     String
+  isActive     Boolean       @default(true)
+  deadline     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  Candidature  Candidature[]
+
+  @@map("recruitments")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Registration {
+  id               String             @id @default(cuid())
+  sessionId        String
+  formationId      String?
+  firstName        String
+  lastName         String
+  email            String
+  phone            String
+  motivation       String?
+  status           RegistrationStatus @default(PENDING)
+  paymentStatus    PaymentStatus      @default(PENDING)
+  paymentAmount    Float?
+  paymentReference String?
+  notes            String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  Payment          Payment[]
+  Formation        Formation?         @relation(fields: [formationId], references: [id])
+  FormationSession FormationSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("registrations")
+}
+
+model TeamMember {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  role         String
+  department   String
+  bio          String?
+  photoUrl     String?
+  linkedin     String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("team_members")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password_hash String
+  firstName     String
+  lastName      String
+  role          Role           @default(VIEWER)
+  status        UserStatus     @default(PENDING)
+  phone         String?
+  avatar        String?
+  bio           String?
+  isActive      Boolean        @default(true)
+  lastLogin     DateTime?
+  emailVerified DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  ActivityLog   ActivityLog[]
+  Article       Article[]
+  Evaluation    Evaluation[]
+  File          File[]
+  Notification  Notification[]
+  RefreshToken  RefreshToken[]
+  TeamMember    TeamMember?
+  Project       Project[]      @relation("UserProjects")
+
+  @@map("users")
+}
+
+model Y2CEvent {
+  id                   String                 @id @default(cuid())
+  title                String
+  slug                 String @unique
+  description          String
+  eventType            EventType
+  startDate            DateTime
+  endDate              DateTime
+  location             String
+  maxParticipants      Int?
+  isPaid               Boolean                @default(false)
+  price                Float?
+  imageUrl             String?
+  isPublished          Boolean                @default(false)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  Y2CEventRegistration Y2CEventRegistration[]
+
+  @@map("y2c_events")
+}
+
+model Y2CEventRegistration {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  email       String
+  phone       String
+  studentId   String?
+  institution String?
+  status      String   @default("PENDING")
+  attended    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  Y2CEvent    Y2CEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@map("y2c_event_registrations")
+}
+
+model Y2CMember {
+  id                String          @id @default(cuid())
+  name              String
+  email             String          @unique
+  phone             String
+  studentId         String?
+  institution       String?
+  membershipFeePaid Float?
+  badgeNumber       String          @unique
+  status            Y2CMemberStatus @default(PENDING)
+  joinedAt          DateTime        @default(now())
+  expiresAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  Payment           Payment[]
+
+  @@map("y2c_members")
 }

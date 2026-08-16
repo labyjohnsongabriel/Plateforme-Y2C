@@ -1,0 +1,23 @@
+{
+  "name": "Youth Computing",
+  "short_name": "Youth Comp",
+  "description": "Association pour la promotion des NTIC à Madagascar",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#010B40",
+  "theme_color": "#010B40",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/images/brand/logo-white.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

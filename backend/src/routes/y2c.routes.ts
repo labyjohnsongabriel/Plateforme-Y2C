@@ -1,7 +1,9 @@
+// src/routes/y2c.routes.ts
+
 import { Router } from 'express';
 import { Y2CController } from '../controllers/y2c.controller';
-import { authMiddleware } from '../middlewares/auth.middleware';
-import { isAdmin } from '../middlewares/role.middleware';
+import { authenticate } from '../middlewares/auth.middleware';
+import { isAdmin, isSuperAdmin } from '../middlewares/role.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import {
   createY2CMemberValidator,
@@ -13,39 +15,42 @@ import {
 const router = Router();
 const y2cController = new Y2CController();
 
-// ============ MEMBERS ============
-// Public routes
+// ═══════════════════════════════════════════════════════════════
+// 1. MEMBRES – Routes publiques (inscription, etc.)
+// ═══════════════════════════════════════════════════════════════
 router.post(
   '/members',
   validate(createY2CMemberValidator),
   y2cController.createMember
 );
 
-// Admin routes
+// ═══════════════════════════════════════════════════════════════
+// 2. MEMBRES – Routes administrateur (authentification requise)
+// ═══════════════════════════════════════════════════════════════
 router.get(
   '/members',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.getMembers
 );
 
 router.get(
   '/members/stats',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.getMemberStats
 );
 
 router.get(
   '/members/:id',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.getMember
 );
 
 router.put(
   '/members/:id',
-  authMiddleware,
+  authenticate,
   isAdmin,
   validate(updateY2CMemberValidator),
   y2cController.updateMember
@@ -53,20 +58,38 @@ router.put(
 
 router.delete(
   '/members/:id',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.deleteMember
 );
 
 router.patch(
   '/members/:id/approve',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.approveMember
 );
 
-// ============ EVENTS ============
-// Public routes
+// ═══════════════════════════════════════════════════════════════
+// 3. BADGES – Génération (admin uniquement)
+// ═══════════════════════════════════════════════════════════════
+router.post(
+  '/members/:id/generate-badge',
+  authenticate,
+  isAdmin,
+  y2cController.generateBadgeForMember
+);
+
+router.post(
+  '/members/generate-badges',
+  authenticate,
+  isAdmin,
+  y2cController.generateBadges
+);
+
+// ═══════════════════════════════════════════════════════════════
+// 4. ÉVÉNEMENTS – Routes publiques
+// ═══════════════════════════════════════════════════════════════
 router.get(
   '/events',
   y2cController.getEvents
@@ -82,10 +105,12 @@ router.post(
   y2cController.registerForEvent
 );
 
-// Admin routes
+// ═══════════════════════════════════════════════════════════════
+// 5. ÉVÉNEMENTS – Routes administrateur
+// ═══════════════════════════════════════════════════════════════
 router.post(
   '/events',
-  authMiddleware,
+  authenticate,
   isAdmin,
   validate(createY2CEventValidator),
   y2cController.createEvent
@@ -93,7 +118,7 @@ router.post(
 
 router.put(
   '/events/:id',
-  authMiddleware,
+  authenticate,
   isAdmin,
   validate(updateY2CEventValidator),
   y2cController.updateEvent
@@ -101,21 +126,21 @@ router.put(
 
 router.delete(
   '/events/:id',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.deleteEvent
 );
 
 router.get(
   '/events/stats',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.getEventStats
 );
 
 router.get(
   '/events/:id/registrations',
-  authMiddleware,
+  authenticate,
   isAdmin,
   y2cController.getEventRegistrations
 );

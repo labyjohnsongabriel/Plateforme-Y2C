@@ -1,3 +1,5 @@
+// src/controllers/user.controller.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { UserService } from '../services/user.service';
@@ -13,18 +15,20 @@ export class UserController extends BaseController {
     this.userService = new UserService();
   }
 
+  // ─── CRUD ──────────────────────────────────────────────
+
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
       const search = req.query.search as string;
-      
+
       let users;
       if (search) {
         users = await this.userService.searchUsers(search);
       } else {
         users = await this.userService.findAll(pagination);
       }
-      
+
       this.sendSuccess(res, users);
     } catch (error) {
       logger.error('Error in getAll users:', error);
@@ -75,16 +79,54 @@ export class UserController extends BaseController {
     }
   };
 
+  // ─── Actions spécifiques ──────────────────────────────
+
+  validateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const user = await this.userService.validateUser(id);
+      this.sendUpdated(res, user);
+    } catch (error) {
+      logger.error(`Error in validateUser ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  toggleStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const user = await this.userService.toggleStatus(id);
+      this.sendUpdated(res, user);
+    } catch (error) {
+      logger.error(`Error in toggleStatus ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  changeRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+      const user = await this.userService.changeRole(id, role);
+      this.sendUpdated(res, user);
+    } catch (error) {
+      logger.error(`Error in changeRole ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
   toggleActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
       const user = await this.userService.toggleActive(id);
       this.sendUpdated(res, user);
     } catch (error) {
-      logger.error(`Error in toggleActive user ${req.params.id}:`, error);
+      logger.error(`Error in toggleActive ${req.params.id}:`, error);
       this.handleError(next, error);
     }
   };
+
+  // ─── Statistiques ──────────────────────────────────────
 
   getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -95,6 +137,8 @@ export class UserController extends BaseController {
       this.handleError(next, error);
     }
   };
+
+  // ─── Profil utilisateur ───────────────────────────────
 
   getProfile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -129,6 +173,20 @@ export class UserController extends BaseController {
       this.handleError(next, error);
     }
   };
+
+uploadAvatar = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = this.getUserIdFromAuth(req);
+    if (!req.file) {
+      throw ApiError.badRequest('Aucun fichier téléchargé');
+    }
+    const user = await this.userService.updateAvatar(userId, req.file.path);
+    this.sendUpdated(res, user);
+  } catch (error) {
+    logger.error('Error in uploadAvatar:', error);
+    this.handleError(next, error);
+  }
+};
 
   private getUserIdFromAuth(req: AuthRequest): string {
     if (!req.user) {

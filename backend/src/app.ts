@@ -1,3 +1,4 @@
+// src/app.ts
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -5,8 +6,7 @@ import compression from 'compression';
 import morgan from 'morgan';
 import { Server as SocketServer } from 'socket.io';
 import http from 'http';
-
-// Utilisation de chemins relatifs (pas d'alias @)
+import path from 'path';
 import { corsConfig } from './config/cors';
 import { rateLimitConfig } from './config/rate-limit';
 import { logger } from './config/logger';
@@ -36,9 +36,17 @@ class App {
     this.app.use(express.json({ limit: '10mb' }));
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     this.app.use(compression());
-    this.app.use(morgan('combined', { stream: { write: (message: string) => logger.info(message.trim()) } }));
+    this.app.use(morgan('combined', {
+      stream: { write: (message: string) => logger.info(message.trim()) },
+    }));
     this.app.use(loggingMiddleware);
     this.app.use(rateLimitConfig);
+
+    // ✅ Servir les fichiers statiques (uploads)
+    this.app.use(
+      '/uploads',
+      express.static(path.join(__dirname, '../uploads'))
+    );
 
     this.app.get('/health', (_req, res) => {
       res.status(200).json({

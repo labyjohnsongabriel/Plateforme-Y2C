@@ -37,7 +37,7 @@ router.get(
   teamMemberController.getById
 );
 
-// Admin routes
+// Admin routes   
 router.post(
   '/',
   authMiddleware,

@@ -1,3 +1,5 @@
+// backend/src/controllers/registration.controller.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { RegistrationService } from '../services/registration.service';
@@ -11,7 +13,6 @@ export class RegistrationController extends BaseController {
     this.registrationService = new RegistrationService();
   }
 
-  // ============ GÉNÉRIQUE ============
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
@@ -61,7 +62,6 @@ export class RegistrationController extends BaseController {
     }
   };
 
-  // ============ RECHERCHES SPÉCIFIQUES ============
   getByEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { email } = req.params;
@@ -102,7 +102,6 @@ export class RegistrationController extends BaseController {
     }
   };
 
-  // ============ STATISTIQUES ============
   getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const stats = await this.registrationService.getStats();
@@ -121,7 +120,6 @@ export class RegistrationController extends BaseController {
     }
   };
 
-  // ============ ACTIONS SUR INSCRIPTION (attendues par le routeur) ============
   confirmRegistration = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -152,7 +150,6 @@ export class RegistrationController extends BaseController {
     }
   };
 
-  // Optionnelle : méthode pour ajouter en liste d'attente
   addToWaitingList = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;

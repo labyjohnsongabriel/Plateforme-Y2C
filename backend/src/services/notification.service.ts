@@ -1,151 +1,71 @@
-import { BaseService } from './base.service';
-import { NotificationRepository } from '@repositories/notification.repository';
-import { Notification } from '@prisma/client';
-import { ApiError } from '@utils/ApiError';
-import { logger } from '@config/logger';
-import { socketServer } from '@sockets/socket.server';
-import { env } from '@config/env';
+// backend/src/services/notification.service.ts
 
-export class NotificationService extends BaseService<Notification, any, any> {
+import { NotificationRepository } from '../repositories/notification.repository';
+import { Notification } from '@prisma/client';
+import { CreateNotificationDTO } from '../types/dto/notification.dto';
+import { ApiError } from '../utils/ApiError';
+
+export class NotificationService {
   private notificationRepository: NotificationRepository;
 
   constructor() {
-    super(new NotificationRepository());
     this.notificationRepository = new NotificationRepository();
   }
 
-  async createNotification(data: {
-    userId: string;
-    type: string;
-    title: string;
-    message: string;
-    link?: string;
-  }): Promise<Notification> {
-    const notification = await this.notificationRepository.create(data);
+  /**
+   * Récupère les notifications d'un utilisateur avec pagination
+   */
+  async getByUser(userId: string, pagination?: { page: number; limit: number }) {
+    const { page = 1, limit = 20 } = pagination || {};
+    const skip = (page - 1) * limit;
 
-    // Send real-time notification via socket
-    try {
-      const io = socketServer.getIO();
-      if (io) {
-        io.to(`user:${data.userId}`).emit('notification:receive', notification);
-      }
-    } catch (error) {
-      logger.error('Failed to send real-time notification:', error);
-    }
+    const [data, total] = await Promise.all([
+      this.notificationRepository.findByUserId(userId, { take: limit, skip }),
+      this.notificationRepository.countUnread(userId),
+    ]);
 
-    return notification;
-  }
-
-  async markAsRead(id: string): Promise<Notification> {
-    const notification = await this.notificationRepository.findByIdOrThrow(id);
-    return this.notificationRepository.update(id, {
-      isRead: true,
-    });
-  }
-
-  async markAllAsRead(userId: string): Promise<void> {
-    await this.notificationRepository.updateMany({
-      where: {
-        userId,
-        isRead: false,
-      },
-      data: {
-        isRead: true,
-      },
-    });
-  }
-
-  async getUserNotifications(userId: string, params: any): Promise<any> {
-    return this.notificationRepository.findPaginated({
-      ...params,
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async getUnreadCount(userId: string): Promise<number> {
-    return this.notificationRepository.count({
-      userId,
-      isRead: false,
-    });
-  }
-
-  async deleteNotification(id: string): Promise<void> {
-    await this.notificationRepository.delete(id);
-  }
-
-  async deleteAllUserNotifications(userId: string): Promise<void> {
-    await this.notificationRepository.deleteMany({
-      where: { userId },
-    });
-  }
-
-  // System notifications
-  async notifyNewRegistration(registration: any): Promise<void> {
-    await this.createNotification({
-      userId: registration.userId || registration.email,
-      type: 'REGISTRATION',
-      title: 'Nouvelle inscription',
-      message: `Une nouvelle inscription a été enregistrée pour ${registration.formation?.title || 'une formation'}`,
-      link: `/admin/registrations/${registration.id}`,
-    });
-  }
-
-  async notifyPaymentReceived(payment: any): Promise<void> {
-    await this.createNotification({
-      userId: payment.userId || 'admin',
-      type: 'PAYMENT',
-      title: 'Paiement reçu',
-      message: `Un paiement de ${payment.amount} ${payment.currency} a été reçu`,
-      link: `/admin/payments/${payment.id}`,
-    });
-  }
-
-  async notifyEventCreated(event: any): Promise<void> {
-    // Notify all users
-    const users = await this.getUserIds();
-    for (const userId of users) {
-      await this.createNotification({
-        userId,
-        type: 'EVENT',
-        title: 'Nouvel événement',
-        message: `Un nouvel événement a été créé: ${event.title}`,
-        link: `/events/${event.slug}`,
-      });
-    }
-  }
-
-  async notifyArticlePublished(article: any): Promise<void> {
-    // Notify all users
-    const users = await this.getUserIds();
-    for (const userId of users) {
-      await this.createNotification({
-        userId,
-        type: 'PROMOTION',
-        title: 'Nouvel article',
-        message: `Un nouvel article a été publié: ${article.title}`,
-        link: `/blog/${article.slug}`,
-      });
-    }
-  }
-
-  private async getUserIds(): Promise<string[]> {
-    // This would typically get all active user IDs from the database
-    // For now, return a placeholder
-    return ['admin'];
-  }
-
-  toDTO(notification: Notification): any {
     return {
-      id: notification.id,
-      userId: notification.userId,
-      type: notification.type,
-      title: notification.title,
-      message: notification.message,
-      link: notification.link,
-      isRead: notification.isRead,
-      createdAt: notification.createdAt,
-      updatedAt: notification.updatedAt,
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
+  }
+
+  /**
+   * Marque une notification comme lue (vérifie les droits)
+   */
+  async markAsRead(id: string, userId: string): Promise<Notification> {
+    const notification = await this.notificationRepository.findById(id);
+    if (!notification) {
+      throw ApiError.notFound('Notification introuvable');
+    }
+    if (notification.userId !== userId) {
+      throw ApiError.forbidden('Vous n\'êtes pas autorisé à modifier cette notification');
+    }
+    return this.notificationRepository.markAsRead(id);
+  }
+
+  /**
+   * Marque toutes les notifications d'un utilisateur comme lues
+   */
+  async markAllAsRead(userId: string): Promise<{ count: number }> {
+    return this.notificationRepository.markAllAsRead(userId);
+  }
+
+  /**
+   * Récupère le nombre de notifications non lues
+   */
+  async getUnreadCount(userId: string): Promise<{ count: number }> {
+    const count = await this.notificationRepository.countUnread(userId);
+    return { count };
+  }
+
+  /**
+   * Crée une notification
+   */
+  async create(data: CreateNotificationDTO): Promise<Notification> {
+    return this.notificationRepository.create(data);
   }
 }

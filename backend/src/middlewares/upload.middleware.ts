@@ -2,15 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import fs from 'fs';
 import { ApiError } from '../utils/ApiError';
 import { logger } from '../config/logger';
 
-const ALLOWED_MIME_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'image/svg+xml',
+// ─── Constantes ─────────────────────────────────────────────
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+const ALLOWED_DOCUMENT_TYPES = [
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -19,45 +17,84 @@ const ALLOWED_MIME_TYPES = [
   'application/zip',
   'application/x-zip-compressed',
 ];
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 Mo
 const MAX_FILES = 5;
 
-const storage = multer.memoryStorage();
+// ─── Création des dossiers ────────────────────────────────
+const UPLOAD_DIR = path.join(__dirname, '../../uploads');
+const AVATAR_UPLOAD_DIR = path.join(__dirname, '../../uploads/avatars');
 
-const fileFilter = (
-  req: Request,
-  file: Express.Multer.File,
-  cb: multer.FileFilterCallback
-) => {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+[UPLOAD_DIR, AVATAR_UPLOAD_DIR].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    logger.info(`✅ Dossier créé : ${dir}`);
+  }
+});
+
+// ─── Configuration du stockage pour les fichiers généraux ──
+const diskStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `${uuidv4()}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+// ─── Configuration du stockage pour les avatars ────────────
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, AVATAR_UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName = `${uuidv4()}${ext}`;
+    cb(null, uniqueName);
+  },
+});
+
+// ─── Filtres par type de fichier ───────────────────────────
+const imageFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new ApiError(400, `File type ${file.mimetype} not allowed`) as any);
+    cb(new Error(`Format non autorisé. Utilisez : ${ALLOWED_IMAGE_TYPES.join(', ')}`) as any);
   }
 };
 
-export const upload = multer({
-  storage,
-  limits: {
-    fileSize: MAX_FILE_SIZE,
-    files: MAX_FILES,
-  },
-  fileFilter,
+const avatarFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Format non autorisé pour l'avatar. Utilisez : ${ALLOWED_IMAGE_TYPES.join(', ')}`) as any);
+  }
+};
+
+// ─── Instances Multer ──────────────────────────────────────
+const upload = multer({
+  storage: diskStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: imageFilter,
 });
 
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 Mo
+  fileFilter: avatarFilter,
+});
+
+// ─── Middlewares exportés ──────────────────────────────────
 export const uploadSingle = (fieldName: string) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     upload.single(fieldName)(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
-          // ✅ Correction : utiliser les bons codes Multer
           if (err.code === 'LIMIT_FILE_SIZE') {
-            next(new ApiError(400, `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`));
-          } else if (err.code === 'LIMIT_FILE_COUNT') {
-            next(new ApiError(400, `Too many files. Max: ${MAX_FILES}`));
+            next(new ApiError(400, `Fichier trop volumineux. Max : ${MAX_FILE_SIZE / 1024 / 1024} Mo`));
           } else {
-            next(new ApiError(400, `Upload error: ${err.message}`));
+            next(new ApiError(400, `Erreur d’upload : ${err.message}`));
           }
         } else {
           next(err);
@@ -69,18 +106,17 @@ export const uploadSingle = (fieldName: string) => {
   };
 };
 
-export const uploadMultiple = (fieldName: string, maxCount: number = 5) => {
+export const uploadMultiple = (fieldName: string, maxCount: number = MAX_FILES) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     upload.array(fieldName, maxCount)(req, res, (err) => {
       if (err) {
         if (err instanceof multer.MulterError) {
-          // ✅ Correction : utiliser les bons codes Multer
           if (err.code === 'LIMIT_FILE_SIZE') {
-            next(new ApiError(400, `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`));
+            next(new ApiError(400, `Fichier trop volumineux. Max : ${MAX_FILE_SIZE / 1024 / 1024} Mo`));
           } else if (err.code === 'LIMIT_FILE_COUNT') {
-            next(new ApiError(400, `Too many files. Max: ${maxCount}`));
+            next(new ApiError(400, `Trop de fichiers. Max : ${maxCount}`));
           } else {
-            next(new ApiError(400, `Upload error: ${err.message}`));
+            next(new ApiError(400, `Erreur d’upload : ${err.message}`));
           }
         } else {
           next(err);
@@ -92,27 +128,16 @@ export const uploadMultiple = (fieldName: string, maxCount: number = 5) => {
   };
 };
 
-export const uploadFields = (fields: Array<{ name: string; maxCount: number }>) => {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    upload.fields(fields)(req, res, (err) => {
-      if (err) {
-        if (err instanceof multer.MulterError) {
-          // ✅ Correction : utiliser les bons codes Multer
-          if (err.code === 'LIMIT_FILE_SIZE') {
-            next(new ApiError(400, `File too large. Max size: ${MAX_FILE_SIZE / 1024 / 1024}MB`));
-          } else {
-            next(new ApiError(400, `Upload error: ${err.message}`));
-          }
-        } else {
-          next(err);
-        }
-      } else {
-        next();
-      }
-    });
-  };
+// ✅ Export explicite de uploadAvatar (utilisé dans user.routes.ts)
+export { uploadAvatar };
+
+// ─── Helper pour l'URL absolue ─────────────────────────────
+export const getFileUrl = (req: Request, filename: string): string => {
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  return `${baseUrl}/uploads/${filename}`;
 };
 
+// ─── Gestion d'erreur globale (optionnelle) ───────────────
 export const handleUploadError = (
   err: any,
   req: Request,
@@ -122,19 +147,8 @@ export const handleUploadError = (
   if (err instanceof ApiError) {
     next(err);
   } else if (err instanceof multer.MulterError) {
-    next(new ApiError(400, `Upload error: ${err.message}`));
+    next(new ApiError(400, `Erreur d’upload : ${err.message}`));
   } else {
-    // ✅ Correction : utiliser new ApiError au lieu de ApiError.internalServer
-    next(new ApiError(500, 'Upload failed'));
+    next(new ApiError(500, 'Échec de l’upload'));
   }
-};
-
-export const generateFileName = (originalName: string): string => {
-  const extension = path.extname(originalName);
-  return `${uuidv4()}${extension}`;
-};
-
-export const getFileUrl = (req: Request, filename: string): string => {
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
-  return `${baseUrl}/uploads/${filename}`;
 };

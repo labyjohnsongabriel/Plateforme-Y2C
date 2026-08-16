@@ -88,6 +88,7 @@ export class BaseRepository<T, WhereInput = any, CreateInput = any, UpdateInput 
     });
   }
 
+  // ✅ findMany avec skip/take pour la pagination (appel direct)
   async findMany(params?: {
     where?: WhereInput;
     skip?: number;
@@ -101,10 +102,12 @@ export class BaseRepository<T, WhereInput = any, CreateInput = any, UpdateInput 
     });
   }
 
+  // ✅ findAll = alias de findMany
   async findAll(params?: any): Promise<T[]> {
     return this.findMany(params);
   }
 
+  // ✅ findPaginated – méthode de pagination complète avec métadonnées
   async findPaginated(params: {
     page?: number;
     limit?: number;

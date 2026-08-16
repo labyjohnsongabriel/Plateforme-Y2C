@@ -1,5 +1,14 @@
-import { PaginationParams } from '../index';
+// backend/src/types/dto/candidature.dto.ts
 
+// ============ PAGINATION (définition locale) ============
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+// ============ DTO PRINCIPAL ============
 export interface CandidatureDTO {
   id: string;
   recruitmentId: string;
@@ -48,6 +57,8 @@ export interface EvaluationDTO {
   updatedAt: Date;
 }
 
+// ============ CRÉATION / MISE À JOUR ============
+// ✅ Ces DTOs ne contiennent PAS `candidatureId` (passé séparément)
 export interface CreateCandidatureDTO {
   recruitmentId: string;
   fullName: string;
@@ -62,6 +73,7 @@ export interface UpdateCandidatureDTO {
   notes?: string;
 }
 
+// ✅ Pour les entretiens – `candidatureId` est fourni à part
 export interface CreateInterviewDTO {
   scheduledAt: Date;
   interviewer: string;
@@ -75,12 +87,14 @@ export interface UpdateInterviewDTO {
   status?: string;
 }
 
+// ✅ Pour les évaluations – `candidatureId` et `evaluatorId` sont fournis à part
 export interface CreateEvaluationDTO {
   criteria: string;
   score: number;
   comments?: string;
 }
 
+// ============ FILTRES ET LISTES ============
 export interface CandidatureFilterParams extends PaginationParams {
   search?: string;
   recruitmentId?: string;

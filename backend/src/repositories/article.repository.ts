@@ -1,5 +1,6 @@
 import { BaseRepository } from './base.repository';
 import { Prisma, Article, ArticleStatus } from '@prisma/client';
+import { prisma } from '../config/prisma';
 
 export class ArticleRepository extends BaseRepository<
   Article,
@@ -31,17 +32,30 @@ export class ArticleRepository extends BaseRepository<
    * Récupère un article par son slug (unique)
    */
   async findBySlug(slug: string): Promise<Article | null> {
+    // ✅ findFirst attend directement les critères
     return this.findFirst({ slug });
   }
 
   /**
-   * Récupère tous les articles publiés (avec pagination optionnelle)
+   * Récupère tous les articles publiés (sans pagination, avec skip/take optionnels)
    */
   async findPublished(params?: { skip?: number; take?: number; orderBy?: any }): Promise<Article[]> {
     return this.findMany({
       where: { status: 'PUBLISHED' },
       orderBy: { publishedAt: 'desc' },
       ...params,
+    });
+  }
+
+  /**
+   * Récupère les articles publiés avec pagination (page/limit)
+   */
+  async findPublishedPaginated(page: number, limit: number) {
+    return this.findPaginated({
+      page,
+      limit,
+      where: { status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' },
     });
   }
 
@@ -84,11 +98,10 @@ export class ArticleRepository extends BaseRepository<
       this.count({ status: 'ARCHIVED' }),
     ]);
 
-    const viewsResult = await this.execute(async () => {
-      return await this.model.aggregate({
-        _sum: { views: true },
-        where: { status: 'PUBLISHED' },
-      });
+    // ✅ Utilisation de prisma directement pour éviter les soucis avec this.model
+    const viewsResult = await prisma.article.aggregate({
+      _sum: { views: true },
+      where: { status: 'PUBLISHED' },
     });
 
     return {
@@ -112,7 +125,7 @@ export class ArticleRepository extends BaseRepository<
   }
 
   /**
-   * (Optionnel) Récupère les articles par catégorie
+   * Récupère les articles par catégorie
    */
   async findByCategory(category: string): Promise<Article[]> {
     return this.findMany({
@@ -122,7 +135,7 @@ export class ArticleRepository extends BaseRepository<
   }
 
   /**
-   * (Optionnel) Récupère les articles avec leurs commentaires approuvés
+   * Récupère les articles avec leurs commentaires approuvés
    */
   async findWithComments(id: string): Promise<Article | null> {
     return this.execute(async () => {
@@ -142,15 +155,13 @@ export class ArticleRepository extends BaseRepository<
    * Surcharge de la méthode create pour inclure automatiquement les champs par défaut
    */
   async create(data: Prisma.ArticleCreateInput): Promise<Article> {
-    // On peut ajouter des validations ou transformations ici
     return super.create(data);
   }
 
   /**
-   * Surcharge de update pour gérer les mises à jour de slug si besoin
+   * Surcharge de update
    */
   async update(id: string, data: Prisma.ArticleUpdateInput): Promise<Article> {
-    // On peut ajouter des vérifications supplémentaires
     return super.update(id, data);
   }
 }

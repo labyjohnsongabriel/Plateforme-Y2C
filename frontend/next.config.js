@@ -2,14 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  
+
   images: {
-    domains: [
-      'res.cloudinary.com',
-      'localhost',
-      'youthcomputing.mg',
-      'via.placeholder.com'
-    ],
+    domains: ['localhost', 'res.cloudinary.com', 'youthcomputing.mg', 'via.placeholder.com'],
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       {
@@ -18,40 +13,42 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '5000',
+        pathname: '/uploads/**',
+      },
     ],
   },
-  
+
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },
-  
+
   async headers() {
     return [
       {
         source: '/(.*)',
         headers: [
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
-          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-XSS-Protection', value: '1; mode=block' },
         ],
       },
     ];
   },
-  
+
   async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     return [
       {
+        source: '/uploads/:path*',
+        destination: `${apiUrl}/uploads/:path*`,
+      },
+      {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/:path*`,
+        destination: `${apiUrl}/api/:path*`,
       },
     ];
   },

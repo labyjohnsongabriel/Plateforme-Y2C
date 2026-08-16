@@ -1,3 +1,5 @@
+// src/validators/user.validator.ts
+
 import { body, param, query } from 'express-validator';
 import { Role, UserStatus } from '../types/roles.enum';
 
@@ -111,10 +113,23 @@ export const changePasswordValidator = [
     .withMessage('Passwords do not match'),
 ];
 
+// ✅ CORRECTION : userIdValidator accepte désormais toute chaîne non vide (pour les CUID)
 export const userIdValidator = [
   param('id')
-    .isUUID()
+    .isString()
+    .notEmpty()
     .withMessage('Invalid user ID format'),
+];
+
+export const changeRoleValidator = [
+  ...userIdValidator,
+  body('role')
+    .isIn(Object.values(Role))
+    .withMessage(`Role must be one of: ${Object.values(Role).join(', ')}`),
+];
+
+export const toggleStatusValidator = [
+  ...userIdValidator,
 ];
 
 export const userFilterValidator = [
@@ -186,22 +201,6 @@ export const updateProfileValidator = [
     .withMessage('Avatar must be a valid URL'),
 ];
 
-export const bulkUserValidator = [
-  body('ids')
-    .isArray({ min: 1 })
-    .withMessage('ids must be a non-empty array')
-    .custom((value) => value.every((id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))
-    .withMessage('Each ID must be a valid UUID'),
-  body('action')
-    .isIn(['activate', 'deactivate', 'delete', 'updateRole'])
-    .withMessage('Invalid action'),
-  body('role')
-    .optional()
-    .isIn(Object.values(Role))
-    .withMessage(`Role must be one of: ${Object.values(Role).join(', ')}`),
-];
-
-// Exportation par défaut
 export default {
   createUserValidator,
   updateUserValidator,
@@ -209,5 +208,6 @@ export default {
   userIdValidator,
   userFilterValidator,
   updateProfileValidator,
-  bulkUserValidator,
+  changeRoleValidator,
+  toggleStatusValidator,
 };

@@ -1,3 +1,5 @@
+// src/controllers/formation.controller.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { FormationService } from '../services/formation.service';
@@ -12,21 +14,15 @@ export class FormationController extends BaseController {
     this.formationService = new FormationService();
   }
 
-  /**
-   * Récupère toutes les formations avec pagination et recherche
-   */
+  // ─── Formations ──────────────────────────────────────────────
+
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
       const search = req.query.search as string;
-      
-      let formations;
-      if (search) {
-        formations = await this.formationService.searchFormations(search);
-      } else {
-        formations = await this.formationService.findAll(pagination);
-      }
-      
+      const formations = search
+        ? await this.formationService.searchFormations(search)
+        : await this.formationService.findAll(pagination);
       this.sendSuccess(res, formations);
     } catch (error) {
       logger.error('Error in getAll formations:', error);
@@ -34,23 +30,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère une formation par son slug
-   */
-  getBySlug = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { slug } = req.params;
-      const formation = await this.formationService.findBySlug(slug);
-      this.sendSuccess(res, formation);
-    } catch (error) {
-      logger.error(`Error in getBySlug formation ${req.params.slug}:`, error);
-      this.handleError(next, error);
-    }
-  };
-
-  /**
-   * Récupère une formation par son ID
-   */
   getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -62,9 +41,17 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Crée une nouvelle formation
-   */
+  getBySlug = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { slug } = req.params;
+      const formation = await this.formationService.findBySlug(slug);
+      this.sendSuccess(res, formation);
+    } catch (error) {
+      logger.error(`Error in getBySlug formation ${req.params.slug}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const formation = await this.formationService.create(req.body);
@@ -75,9 +62,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Met à jour une formation
-   */
   update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -89,9 +73,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Supprime une formation
-   */
   delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -103,9 +84,17 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations publiées
-   */
+  togglePublish = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const formation = await this.formationService.togglePublish(id);
+      this.sendUpdated(res, formation);
+    } catch (error) {
+      logger.error(`Error in togglePublish formation ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
   getPublished = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
@@ -117,9 +106,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations par catégorie
-   */
   getByCategory = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { category } = req.params;
@@ -132,9 +118,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations par niveau
-   */
   getByLevel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { level } = req.params;
@@ -147,9 +130,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les statistiques des formations
-   */
   getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const stats = await this.formationService.getStats();
@@ -160,9 +140,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations les plus populaires
-   */
   getMostPopular = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const limit = parseInt(req.query.limit as string) || 5;
@@ -174,9 +151,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère une formation avec ses sessions
-   */
   getWithSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -188,9 +162,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations recommandées
-   */
   getRecommended = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const limit = parseInt(req.query.limit as string) || 5;
@@ -202,9 +173,6 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Récupère les formations avec filtres avancés
-   */
   getFiltered = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const filters = {
@@ -224,31 +192,80 @@ export class FormationController extends BaseController {
     }
   };
 
-  /**
-   * Publie ou dépublie une formation
-   */
-  togglePublish = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  // ─── Sessions ──────────────────────────────────────────────────
+
+  createSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { id } = req.params;
-      const formation = await this.formationService.togglePublish(id);
-      this.sendUpdated(res, formation);
+      const { formationId } = req.params;
+      const session = await this.formationService.createSession(formationId, req.body);
+      this.sendCreated(res, session);
     } catch (error) {
-      logger.error(`Error in togglePublish formation ${req.params.id}:`, error);
+      logger.error('Error in createSession:', error);
       this.handleError(next, error);
     }
   };
 
-  /**
-   * Met à jour les métriques d'une formation
-   */
-  updateMetrics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  updateSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const metrics = req.body;
-      const formation = await this.formationService.updateMetrics(id, metrics);
-      this.sendUpdated(res, formation);
+      const session = await this.formationService.updateSession(id, req.body);
+      this.sendUpdated(res, session);
     } catch (error) {
-      logger.error(`Error in updateMetrics formation ${req.params.id}:`, error);
+      logger.error(`Error in updateSession ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  deleteSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      await this.formationService.deleteSession(id);
+      this.sendDeleted(res, null);
+    } catch (error) {
+      logger.error(`Error in deleteSession ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  getSessionsByFormation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { formationId } = req.params;
+      const sessions = await this.formationService.getSessionsByFormation(formationId);
+      this.sendSuccess(res, sessions);
+    } catch (error) {
+      logger.error(`Error in getSessionsByFormation ${req.params.formationId}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  getSessionById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const session = await this.formationService.getSessionById(id);
+      this.sendSuccess(res, session);
+    } catch (error) {
+      logger.error(`Error in getSessionById ${req.params.id}:`, error);
+      this.handleError(next, error);
+    }
+  };
+
+  getUpcomingSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const sessions = await this.formationService.getUpcomingSessions(limit);
+      this.sendSuccess(res, sessions);
+    } catch (error) {
+      logger.error('Error in getUpcomingSessions:', error);
+      this.handleError(next, error);
+    }
+  };
+
+  getSessionStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const stats = await this.formationService.getSessionStats();
+      this.sendSuccess(res, stats);
+    } catch (error) {
+      logger.error('Error in getSessionStats:', error);
       this.handleError(next, error);
     }
   };

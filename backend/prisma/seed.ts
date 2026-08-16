@@ -1,4 +1,6 @@
-import { PrismaClient, Role, UserStatus } from '@prisma/client';
+// prisma/seed.ts
+
+import { PrismaClient, Role, UserStatus, ArticleStatus, ProjectStatus, EventType } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -6,12 +8,20 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // 1. Create Super Admin
+  // =====================
+  // 1. Super Admin
+  // =====================
   const hashedPassword = await bcrypt.hash('Admin@2026!', 12);
-  
   const superAdmin = await prisma.user.upsert({
     where: { email: 'admin@youthcomputing.mg' },
-    update: {},
+    update: {
+      password_hash: hashedPassword,
+      firstName: 'Super',
+      lastName: 'Admin',
+      role: Role.SUPER_ADMIN,
+      status: UserStatus.ACTIVE,
+      isActive: true,
+    },
     create: {
       email: 'admin@youthcomputing.mg',
       password_hash: hashedPassword,
@@ -22,10 +32,35 @@ async function main() {
       isActive: true,
     },
   });
+  console.log('✅ Super Admin:', superAdmin.email);
 
-  console.log('✅ Super Admin created:', superAdmin.email);
+  // Admin de test
+  const adminPassword = await bcrypt.hash('Admin@2026!', 12);
+  const adminUser = await prisma.user.upsert({
+    where: { email: 'admin2@youthcomputing.mg' },
+    update: {
+      password_hash: adminPassword,
+      firstName: 'Admin',
+      lastName: 'Test',
+      role: Role.ADMIN,
+      status: UserStatus.ACTIVE,
+      isActive: true,
+    },
+    create: {
+      email: 'admin2@youthcomputing.mg',
+      password_hash: adminPassword,
+      firstName: 'Admin',
+      lastName: 'Test',
+      role: Role.ADMIN,
+      status: UserStatus.ACTIVE,
+      isActive: true,
+    },
+  });
+  console.log('✅ Admin de test:', adminUser.email);
 
-  // 2. Create sample formations
+  // =====================
+  // 2. Formations
+  // =====================
   const formations = [
     {
       title: 'Développement Web avec Next.js',
@@ -75,10 +110,11 @@ async function main() {
       create: formation,
     });
   }
+  console.log('✅ Formations créées');
 
-  console.log('✅ Formations created');
-
-  // 3. Create sample articles
+  // =====================
+  // 3. Articles
+  // =====================
   const articles = [
     {
       title: 'Lancement de la Communauté Y2C',
@@ -98,7 +134,7 @@ async function main() {
       excerpt: 'Découvrez la nouvelle communauté Y2C pour les passionnés des NTIC.',
       category: 'Actualités',
       tags: ['communauté', 'y2c', 'ntic'],
-      status: 'PUBLISHED',
+      status: ArticleStatus.PUBLISHED,
       publishedAt: new Date(),
       authorId: superAdmin.id,
       isFeatured: true,
@@ -120,7 +156,7 @@ async function main() {
       excerpt: 'Retour sur le Hack a Town 2024 qui a rassemblé les talents de la communauté.',
       category: 'Événements',
       tags: ['hackathon', 'innovation', 'collaboration'],
-      status: 'PUBLISHED',
+      status: ArticleStatus.PUBLISHED,
       publishedAt: new Date(),
       authorId: superAdmin.id,
       isFeatured: false,
@@ -134,10 +170,11 @@ async function main() {
       create: article,
     });
   }
+  console.log('✅ Articles créés');
 
-  console.log('✅ Articles created');
-
-  // 4. Create sample projects
+  // =====================
+  // 4. Projets
+  // =====================
   const projects = [
     {
       title: 'Plateforme d\'Apprentissage en Ligne',
@@ -150,7 +187,7 @@ async function main() {
       year: 2024,
       category: 'Éducation',
       isFeatured: true,
-      status: 'COMPLETED',
+      status: ProjectStatus.COMPLETED,
     },
     {
       title: 'Application Mobile de Santé',
@@ -163,7 +200,7 @@ async function main() {
       year: 2023,
       category: 'Santé',
       isFeatured: false,
-      status: 'COMPLETED',
+      status: ProjectStatus.COMPLETED,
     },
   ];
 
@@ -174,12 +211,21 @@ async function main() {
       create: project,
     });
   }
+  console.log('✅ Projets créés');
 
-  console.log('✅ Projects created');
-
-  // 5. Create sample team members
-  const teamMembers = [
-    {
+  // =====================
+  // 5. Équipe
+  // =====================
+  await prisma.teamMember.upsert({
+    where: { userId: superAdmin.id },
+    update: {
+      role: 'Fondateur & Président',
+      department: 'Direction',
+      bio: 'Passionné par les NTIC et l\'éducation numérique.',
+      displayOrder: 1,
+      isActive: true,
+    },
+    create: {
       userId: superAdmin.id,
       role: 'Fondateur & Président',
       department: 'Direction',
@@ -187,24 +233,58 @@ async function main() {
       displayOrder: 1,
       isActive: true,
     },
+  });
+  console.log('✅ Équipe créée');
+
+  // =====================
+  // 6. Événements (CORRIGÉ : suppression de createdBy)
+  // =====================
+  const events = [
+    {
+      title: 'Hack a Town 2025',
+      slug: 'hack-a-town-2025',
+      description: 'Le plus grand hackathon de Madagascar, rassemblant les innovateurs de demain.',
+      eventType: EventType.HACKATHON,
+      startDate: new Date('2025-03-15T08:00:00Z'),
+      endDate: new Date('2025-03-17T18:00:00Z'),
+      time: '08:00 - 18:00',
+      location: 'Antananarivo, Madagascar',
+      isPublished: true,
+      // createdBy supprimé (n'existe pas dans le modèle)
+      // On peut ajouter d'autres champs optionnels si nécessaire
+      maxAttendees: 100,
+      isPaid: false,
+    },
+    {
+      title: 'Conférence Tech & Innovation',
+      slug: 'conf-tech-innovation',
+      description: 'Une conférence sur les tendances technologiques et l\'innovation à Madagascar.',
+      eventType: EventType.CONFERENCE,
+      startDate: new Date('2025-04-10T09:00:00Z'),
+      endDate: new Date('2025-04-11T17:00:00Z'),
+      time: '09:00 - 17:00',
+      location: 'En ligne (Zoom)',
+      isPublished: true,
+      maxAttendees: 500,
+      isPaid: false,
+    },
   ];
 
-  for (const member of teamMembers) {
-    await prisma.teamMember.upsert({
-      where: { userId: member.userId },
-      update: member,
-      create: member,
+  for (const event of events) {
+    await prisma.event.upsert({
+      where: { slug: event.slug },
+      update: event,
+      create: event,
     });
   }
+  console.log('✅ Événements créés');
 
-  console.log('✅ Team members created');
-
-  console.log('🎉 Seeding completed successfully!');
+  console.log('🎉 Seeding terminé avec succès !');
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Error seeding database:', e);
+    console.error('❌ Erreur lors du seeding :', e);
     process.exit(1);
   })
   .finally(async () => {

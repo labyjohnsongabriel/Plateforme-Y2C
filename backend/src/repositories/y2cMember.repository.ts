@@ -1,3 +1,4 @@
+// src/repositories/y2cMember.repository.ts
 import { BaseRepository } from './base.repository';
 import { Prisma, Y2CMember } from '@prisma/client';
 import { NotFoundException } from '../exceptions/not-found.exception';
@@ -9,7 +10,8 @@ export class Y2CMemberRepository extends BaseRepository<
   Prisma.Y2CMemberUpdateInput
 > {
   constructor() {
-    super('y2cMember');
+    // ✅ Correction : le nom exact du modèle dans le client Prisma
+    super('y2CMember'); // ← changement ici
   }
 
   async findByEmail(email: string): Promise<Y2CMember | null> {

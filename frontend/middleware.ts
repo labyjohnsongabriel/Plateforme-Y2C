@@ -1,7 +1,9 @@
+// src/middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { jwtVerify } from 'jose';
 
-// Routes publiques (accessibles sans authentification)
+// Routes publiques
 const publicRoutes = [
   '/',
   '/a-propos',
@@ -13,9 +15,12 @@ const publicRoutes = [
   '/connexion',
   '/inscription',
   '/mot-de-passe-oublie',
+  '/politique-de-confidentialite',
+  '/mentions-legales',
+  '/acces-refuse',
 ];
 
-// Routes administratives (nécessitent authentification)
+// Routes admin
 const adminRoutes = [
   '/admin',
   '/admin/dashboard',
@@ -27,55 +32,74 @@ const adminRoutes = [
   '/admin/utilisateurs',
   '/admin/messages',
   '/admin/parametres',
+  '/admin/roles',
+  '/admin/equipe',
+  '/admin/partenaires',
 ];
 
-export default function middleware(request: NextRequest) {
+// Rôles autorisés pour les routes admin
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'EDITOR']; // selon votre besoin
+
+async function verifyToken(token: string): Promise<any> {
+  try {
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || 'your-secret-key');
+    const { payload } = await jwtVerify(token, secret);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
-  // Vérifier si la route est publique
-  const isPublicRoute = publicRoutes.some(route => 
+
+  const isPublicRoute = publicRoutes.some(route =>
     pathname === route || pathname.startsWith(route + '/')
   );
-  
-  // Vérifier si la route est admin
-  const isAdminRoute = adminRoutes.some(route => 
+
+  const isAdminRoute = adminRoutes.some(route =>
     pathname.startsWith(route)
   );
 
-  // Si c'est une route admin, rediriger vers login
+  // Récupérer le token
+  let token = request.cookies.get('auth-token')?.value;
+  if (!token) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  // Route admin
   if (isAdminRoute) {
-    // Vérification simple avec cookie
-    const token = request.cookies.get('auth-token');
-    
     if (!token) {
       const url = new URL('/connexion', request.url);
       url.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(url);
     }
+
+    const payload = await verifyToken(token);
+    if (!payload || !ADMIN_ROLES.includes(payload.role)) {
+      return NextResponse.redirect(new URL('/acces-refuse', request.url));
+    }
   }
 
-  // Si c'est une route d'authentification et que l'utilisateur est connecté
-  if (pathname === '/connexion' || pathname === '/inscription') {
-    const token = request.cookies.get('auth-token');
+  // Si déjà connecté et sur une page d'authentification
+  if (['/connexion', '/inscription'].includes(pathname)) {
     if (token) {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      const payload = await verifyToken(token);
+      if (payload && ADMIN_ROLES.includes(payload.role)) {
+        return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+      }
+      return NextResponse.redirect(new URL('/', request.url));
     }
   }
 
   return NextResponse.next();
 }
 
-// Configuration du middleware
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     * - api routes (handled by backend)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|api|fonts).*)',
   ],
 };

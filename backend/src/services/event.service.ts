@@ -6,6 +6,7 @@ import { Event } from '@prisma/client';
 import { generateUniqueSlug } from '../utils/slugify';
 import { mailer } from '../config/mailer';
 import { logger } from '../config/logger';
+
 export class EventService extends BaseService<Event, CreateEventDTO, UpdateEventDTO> {
   private eventRepository: EventRepository;
 
@@ -14,8 +15,10 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
     this.eventRepository = new EventRepository();
   }
 
+  // ─── CREATE ────────────────────────────────────────────────
   async create(data: CreateEventDTO): Promise<Event> {
-    const slug = await generateUniqueSlug(data.title, this.eventRepository, 'slug');
+    // ✅ Correction : passer le nom du modèle 'event'
+    const slug = await generateUniqueSlug(data.title, 'event');
     return this.eventRepository.create({
       ...data,
       slug,
@@ -24,12 +27,14 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
     });
   }
 
+  // ─── UPDATE ────────────────────────────────────────────────
   async update(id: string, data: UpdateEventDTO): Promise<Event> {
     const event = await this.eventRepository.findByIdOrThrow(id);
 
     let slug = event.slug;
     if (data.title && data.title !== event.title) {
-      slug = await generateUniqueSlug(data.title, this.eventRepository, 'slug');
+      // ✅ Correction : passer le nom du modèle 'event'
+      slug = await generateUniqueSlug(data.title, 'event');
     }
 
     return this.eventRepository.update(id, {
@@ -38,6 +43,7 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
     });
   }
 
+  // ─── AUTRES MÉTHODES ──────────────────────────────────────
   async getBySlug(slug: string): Promise<Event | null> {
     return this.eventRepository.findBySlug(slug);
   }
@@ -58,11 +64,11 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
     return this.eventRepository.getStats();
   }
 
-  // ============ REGISTRATIONS ============
+  // ─── INSCRIPTIONS ──────────────────────────────────────────
   async registerForEvent(eventId: string, data: CreateEventRegistrationDTO): Promise<any> {
     const event = await this.eventRepository.findByIdOrThrow(eventId);
 
-    // Check capacity
+    // Vérifier la capacité
     if (event.maxAttendees) {
       const registrations = await this.eventRepository.getRegistrations(eventId);
       if (registrations.length >= event.maxAttendees) {
@@ -70,7 +76,7 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
       }
     }
 
-    // Check if already registered
+    // Vérifier si déjà inscrit
     const existingRegistrations = await this.eventRepository.getRegistrations(eventId);
     const alreadyRegistered = existingRegistrations.some(r => r.email === data.email);
     if (alreadyRegistered) {
@@ -83,7 +89,7 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
       status: 'PENDING',
     });
 
-    // Send confirmation
+    // Envoyer la confirmation
     try {
       await mailer.sendTemplatedEmail(data.email, 'event-registration', {
         name: data.name,

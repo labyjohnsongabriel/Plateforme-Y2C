@@ -1,42 +1,111 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
+import { Inter, Ubuntu } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
+import { siteConfig } from '@/config/site';
 
-// ✅ Utiliser une police existante au lieu de "Geist"
-const inter = Inter({ 
+// Polices optimisées avec display swap
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+  preload: true,
 });
 
+const ubuntu = Ubuntu({
+  weight: ['300', '400', '500', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-ubuntu',
+  preload: true,
+});
+
+// Métadonnées complètes
 export const metadata: Metadata = {
-  title: 'Youth Computing - Association NTIC Madagascar',
-  description: 'Promotion des NTIC et de l\'inclusion numérique à Madagascar',
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
   keywords: [
     'Youth Computing',
     'NTIC Madagascar',
     'Formation Informatique',
     'Communauté Y2C',
     'Innovation Madagascar',
+    'Association',
+    'Technologie',
   ],
   authors: [{ name: 'Youth Computing Association' }],
+  creator: 'Youth Computing',
+  publisher: 'Youth Computing',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   openGraph: {
     type: 'website',
     locale: 'fr_FR',
-    url: 'https://youthcomputing.mg',
-    title: 'Youth Computing - Association NTIC Madagascar',
-    description: 'Promotion des NTIC et de l\'inclusion numérique à Madagascar',
-    siteName: 'Youth Computing',
+    url: siteConfig.url,
+    title: siteConfig.name,
+    description: siteConfig.description,
+    siteName: siteConfig.name,
     images: [
       {
-        url: '/images/brand/og-image.jpg',
+        url: `${siteConfig.url}/images/brand/og-image.jpg`,
         width: 1200,
         height: 630,
-        alt: 'Youth Computing Association',
+        alt: siteConfig.name,
       },
     ],
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: [`${siteConfig.url}/images/brand/og-image.jpg`],
+    creator: '@youthcomputing',
+  },
+  icons: {
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/images/brand/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/images/brand/icon-192x192.png', sizes: '192x192' }],
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: siteConfig.shortName || siteConfig.name,
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: {
+    telephone: true,
+    email: true,
+    address: false,
+  },
+  alternates: {
+    canonical: siteConfig.url,
+  },
+};
+
+// Viewport configuration
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#010B40' },
+    { media: '(prefers-color-scheme: dark)', color: '#010B40' },
+  ],
+  colorScheme: 'light dark',
 };
 
 export default function RootLayout({
@@ -46,10 +115,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body
+        className={`
+          ${inter.variable}
+          ${ubuntu.variable}
+          font-ubuntu
+          antialiased
+          bg-background
+          text-foreground
+          min-h-screen
+          flex
+          flex-col
+        `}
+      >
         <Providers>
-          <div className="min-h-screen flex flex-col">
-            {children}
+          <div className="flex min-h-screen flex-col">
+            <main className="flex-1">
+              {children}
+            </main>
           </div>
         </Providers>
       </body>

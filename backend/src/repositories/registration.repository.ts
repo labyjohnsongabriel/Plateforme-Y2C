@@ -19,7 +19,7 @@ export class RegistrationRepository extends BaseRepository<
         session: true,
       },
     });
-  }
+  } 
 
   async findByFormationId(formationId: string): Promise<Registration[]> {
     return this.findMany({

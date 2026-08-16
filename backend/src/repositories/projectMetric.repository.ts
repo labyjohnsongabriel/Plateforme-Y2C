@@ -1,3 +1,5 @@
+// backend/src/repositories/projectMetric.repository.ts
+
 import { BaseRepository } from './base.repository';
 import { Prisma, ProjectMetric } from '@prisma/client';
 
@@ -18,7 +20,6 @@ export class ProjectMetricRepository extends BaseRepository<
     });
   }
 
-  // ✅ Correction : `findFirst` prend directement le `where`
   async findByKey(projectId: string, key: string): Promise<ProjectMetric | null> {
     return this.findFirst({
       projectId,
@@ -36,12 +37,12 @@ export class ProjectMetricRepository extends BaseRepository<
       });
     }
 
-    // ✅ Correction : utiliser la relation Prisma `project: { connect: { id } }`
+    // ✅ Correction : utiliser la relation Prisma "Project" (majuscule)
     return this.create({
       metricKey: key,
       metricValue: value,
       description,
-      project: {
+      Project: {
         connect: { id: projectId }
       }
     });

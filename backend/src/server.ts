@@ -1,29 +1,31 @@
+// src/server.ts
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Charger .env AVANT tout autre import
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 import App from './app';
 import { logger } from './config/logger';
 
-const PORT = process.env.PORT || 8000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
+const HOST = process.env.HOST || '127.0.0.1';
 
 async function startServer() {
   try {
     console.log('🔍 Environnement:', {
-      NODE_ENV: process.env.NODE_ENV,
-      PORT: process.env.PORT,
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      PORT,
+      HOST,
       DATABASE_URL: process.env.DATABASE_URL ? '✅ Définie' : '❌ Non définie',
     });
 
     const app = new App();
     const server = app.getServer();
 
-    server.listen(PORT, () => {
-      logger.info(`🚀 Server running on port ${PORT}`);
+    server.listen(PORT, HOST, () => {
+      logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
       logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`📦 Database: ${process.env.DATABASE_URL ? '✅ Connectée' : '❌ Non configurée'}`);
+      logger.info(`📦 Database: ${process.env.DATABASE_URL ? '✅ Configurée' : '❌ Non configurée'}`);
     });
 
     const shutdown = async (signal: string) => {
@@ -40,7 +42,6 @@ async function startServer() {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-
   } catch (error) {
     console.error('❌ Failed to start server:', error);
     logger.error('❌ Failed to start server:', error);

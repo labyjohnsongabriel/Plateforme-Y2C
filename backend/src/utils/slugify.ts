@@ -1,38 +1,45 @@
-export const slugify = (text: string): string => {
-  return text
-    .toString()
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(/[^\w-]+/g, '') // Remove all non-word characters
-    .replace(/--+/g, '-') // Replace multiple - with single -
-    .replace(/^-+/, '') // Trim - from start of text
-    .replace(/-+$/, ''); // Trim - from end of text
+import slugify from 'slugify';
+import { prisma } from '../config/prisma';
+
+export { slugify };
+
+export const slugifyText = (text: string): string => {
+  return slugify(text, {
+    lower: true,
+    strict: true,
+    remove: /[*+~.()'"!:@]/g,
+  });
 };
 
+/**
+ * Génère un slug unique pour un modèle Prisma.
+ * @param baseSlug - Titre à transformer
+ * @param modelName - Nom du modèle en minuscule (ex: 'project', 'article')
+ * @param field - Champ unique (par défaut 'slug')
+ * @returns Slug unique
+ */
 export const generateUniqueSlug = async (
   baseSlug: string,
-  model: any,
+  modelName: string,
   field: string = 'slug'
 ): Promise<string> => {
-  let slug = slugify(baseSlug);
+  const slug = slugifyText(baseSlug) || modelName;
   let uniqueSlug = slug;
   let counter = 1;
 
+  const modelDelegate = (prisma as any)[modelName];
+  if (!modelDelegate) {
+    throw new Error(`Modèle "${modelName}" introuvable dans Prisma`);
+  }
+
   while (true) {
-    const existing = await model.findFirst({
-      where: {
-        [field]: uniqueSlug,
-      },
+    const existing = await modelDelegate.findUnique({
+      where: { [field]: uniqueSlug },
+      select: { id: true },
     });
-
-    if (!existing) {
-      break;
-    }
-
+    if (!existing) break;
     uniqueSlug = `${slug}-${counter}`;
     counter++;
   }
-
   return uniqueSlug;
 };

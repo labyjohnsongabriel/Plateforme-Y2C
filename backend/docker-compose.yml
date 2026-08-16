@@ -11,7 +11,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=8000
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/youth_computing?schema=public
+      - DATABASE_URL=postgresql://postgres:admin@localhost:5432/youthcomputing?schema=public
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:

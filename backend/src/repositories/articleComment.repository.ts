@@ -1,5 +1,6 @@
 import { BaseRepository } from './base.repository';
 import { Prisma, ArticleComment } from '@prisma/client';
+import { prisma } from '../config/prisma';
 
 export class ArticleCommentRepository extends BaseRepository<
   ArticleComment,
@@ -13,7 +14,7 @@ export class ArticleCommentRepository extends BaseRepository<
 
   async findByArticle(articleId: string): Promise<ArticleComment[]> {
     return this.findMany({
-      where: { 
+      where: {
         articleId,
         parentId: null,
       },
@@ -30,7 +31,7 @@ export class ArticleCommentRepository extends BaseRepository<
 
   async findApprovedByArticle(articleId: string): Promise<ArticleComment[]> {
     return this.findMany({
-      where: { 
+      where: {
         articleId,
         isApproved: true,
         parentId: null,
@@ -69,13 +70,10 @@ export class ArticleCommentRepository extends BaseRepository<
       this.count({ isApproved: false }),
     ]);
 
-    const result = await this.execute(async () => {
-      return await this.model.groupBy({
-        by: ['articleId'],
-        _count: {
-          articleId: true,
-        },
-      });
+    // ✅ Utilisation de prisma directement
+    const result = await prisma.articleComment.groupBy({
+      by: ['articleId'],
+      _count: { articleId: true },
     });
 
     const byArticle = result.reduce((acc: Record<string, number>, item: any) => {

@@ -1,31 +1,60 @@
-import { BaseService } from './base.service';
+// backend/src/services/partner.service.ts
+
 import { PartnerRepository } from '../repositories/partner.repository';
 import { CreatePartnerDTO, UpdatePartnerDTO } from '../types/dto/partner.dto';
+import { ApiError } from '../utils/ApiError';
 import { Partner } from '@prisma/client';
 
-export class PartnerService extends BaseService<Partner, CreatePartnerDTO, UpdatePartnerDTO> {
+export class PartnerService {
   private partnerRepository: PartnerRepository;
 
   constructor() {
-    super(new PartnerRepository());
     this.partnerRepository = new PartnerRepository();
   }
 
+  // ─── CRUD ──────────────────────────────────────────────
+  async findAll(params?: { page?: number; limit?: number }): Promise<{ data: Partner[]; total: number; page: number; limit: number; totalPages: number }> {
+    const { page = 1, limit = 10 } = params || {};
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.partnerRepository.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.partnerRepository.count(),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findById(id: string): Promise<Partner> {
+    return this.partnerRepository.findByIdOrThrow(id);
+  }
+
   async create(data: CreatePartnerDTO): Promise<Partner> {
-    return this.partnerRepository.create({
-      ...data,
-      isActive: data.isActive !== undefined ? data.isActive : true,
-    });
+    return this.partnerRepository.create(data);
   }
 
   async update(id: string, data: UpdatePartnerDTO): Promise<Partner> {
+    await this.partnerRepository.findByIdOrThrow(id);
     return this.partnerRepository.update(id, data);
   }
 
+  async delete(id: string): Promise<void> {
+    await this.partnerRepository.delete(id);
+  }
+
+  // ─── Méthodes spécifiques ──────────────────────────────
   async getActivePartners(): Promise<Partner[]> {
-    return this.partnerRepository.findMany({
-      where: { isActive: true },
-    });
+    return this.partnerRepository.findActive();
   }
 
   async toggleActive(id: string): Promise<Partner> {
@@ -35,18 +64,11 @@ export class PartnerService extends BaseService<Partner, CreatePartnerDTO, Updat
     });
   }
 
-  // ✅ AJOUT : Méthode getStats
-  async getStats(): Promise<{
-    total: number;
-    active: number;
-    inactive: number;
-  }> {
-    const total = await this.partnerRepository.count();
-    const active = await this.partnerRepository.count({ isActive: true });
-    const inactive = await this.partnerRepository.count({ isActive: false });
-    return { total, active, inactive };
+  async getStats() {
+    return this.partnerRepository.getStats();
   }
 
+  // ─── DTO ──────────────────────────────────────────────
   toDTO(partner: Partner): any {
     return {
       id: partner.id,

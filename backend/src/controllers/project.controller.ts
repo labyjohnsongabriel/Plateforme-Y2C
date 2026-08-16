@@ -1,7 +1,7 @@
+// backend/src/controllers/project.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { ProjectService } from '../services/project.service';
-import { AuthRequest } from '../middlewares/auth.middleware';
 
 export class ProjectController extends BaseController {
   private projectService: ProjectService;
@@ -11,19 +11,33 @@ export class ProjectController extends BaseController {
     this.projectService = new ProjectService();
   }
 
+  // ✅ Utilise findPaginated
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const pagination = this.getPaginationParams(req);
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 10;
       const search = req.query.search as string;
-      
-      let projects;
+
+      let result;
       if (search) {
-        projects = await this.projectService.searchProjects(search);
+        const projects = await this.projectService.searchProjects(search);
+        result = {
+          data: projects,
+          pagination: {
+            page: 1,
+            limit: projects.length,
+            total: projects.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
       } else {
-        projects = await this.projectService.findAll(pagination);
+        // ✅ Utilisation de la pagination
+        result = await this.projectService.findAllPaginated(page, limit);
       }
-      
-      this.sendSuccess(res, projects);
+
+      this.sendSuccess(res, result);
     } catch (error) {
       this.handleError(next, error);
     }

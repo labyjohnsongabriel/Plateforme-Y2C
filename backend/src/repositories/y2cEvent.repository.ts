@@ -1,5 +1,7 @@
 import { BaseRepository } from './base.repository';
 import { Prisma, Y2CEvent, Y2CEventRegistration } from '@prisma/client';
+import prisma from '../../prisma/client';
+import { NotFoundException } from '../exceptions/not-found.exception';
 
 export class Y2CEventRepository extends BaseRepository<
   Y2CEvent,
@@ -8,7 +10,8 @@ export class Y2CEventRepository extends BaseRepository<
   Prisma.Y2CEventUpdateInput
 > {
   constructor() {
-    super('y2cEvent');
+    // ✅ On passe le nom du modèle (le BaseRepository utilisera prisma[modelName])
+    super('y2CEvent');
   }
 
   async findBySlug(slug: string): Promise<Y2CEvent | null> {
@@ -17,6 +20,12 @@ export class Y2CEventRepository extends BaseRepository<
         where: { slug },
       });
     });
+  }
+
+  async findBySlugOrThrow(slug: string): Promise<Y2CEvent> {
+    const event = await this.findBySlug(slug);
+    if (!event) throw NotFoundException.resource('Y2CEvent', `slug: ${slug}`);
+    return event;
   }
 
   async findPublished(): Promise<Y2CEvent[]> {
@@ -61,13 +70,9 @@ export class Y2CEventRepository extends BaseRepository<
       this.count({ endDate: { lt: new Date() }, isPublished: true }),
     ]);
 
-    const result = await this.execute(async () => {
-      return await this.model.groupBy({
-        by: ['eventType'],
-        _count: {
-          eventType: true,
-        },
-      });
+    const result = await prisma.y2CEvent.groupBy({
+      by: ['eventType'],
+      _count: { eventType: true },
     });
 
     const byType = result.reduce((acc: Record<string, number>, item: any) => {
@@ -75,13 +80,8 @@ export class Y2CEventRepository extends BaseRepository<
       return acc;
     }, {});
 
-    // Get registrations count
-    const registrationsResult = await this.execute(async () => {
-      return await (this.prisma as any).y2cEventRegistration.aggregate({
-        _count: {
-          id: true,
-        },
-      });
+    const registrationsResult = await prisma.y2CEventRegistration.aggregate({
+      _count: { id: true },
     });
 
     return {
@@ -95,29 +95,22 @@ export class Y2CEventRepository extends BaseRepository<
     };
   }
 
+  // ─── Inscriptions ──────────────────────────────────────────
   async getRegistrations(eventId: string): Promise<Y2CEventRegistration[]> {
-    return this.execute(async () => {
-      return await (this.prisma as any).y2cEventRegistration.findMany({
-        where: { eventId },
-        orderBy: { createdAt: 'desc' },
-      });
+    return prisma.y2CEventRegistration.findMany({
+      where: { eventId },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
-  async createRegistration(data: any): Promise<Y2CEventRegistration> {
-    return this.execute(async () => {
-      return await (this.prisma as any).y2cEventRegistration.create({
-        data,
-      });
-    });
+  async createRegistration(data: Prisma.Y2CEventRegistrationCreateInput): Promise<Y2CEventRegistration> {
+    return prisma.y2CEventRegistration.create({ data });
   }
 
-  async updateRegistration(id: string, data: any): Promise<Y2CEventRegistration> {
-    return this.execute(async () => {
-      return await (this.prisma as any).y2cEventRegistration.update({
-        where: { id },
-        data,
-      });
+  async updateRegistration(id: string, data: Prisma.Y2CEventRegistrationUpdateInput): Promise<Y2CEventRegistration> {
+    return prisma.y2CEventRegistration.update({
+      where: { id },
+      data,
     });
   }
 
@@ -129,11 +122,11 @@ export class Y2CEventRepository extends BaseRepository<
     attended: number;
   }> {
     const [total, pending, confirmed, cancelled, attended] = await Promise.all([
-      (this.prisma as any).y2cEventRegistration.count({ where: { eventId } }),
-      (this.prisma as any).y2cEventRegistration.count({ where: { eventId, status: 'PENDING' } }),
-      (this.prisma as any).y2cEventRegistration.count({ where: { eventId, status: 'CONFIRMED' } }),
-      (this.prisma as any).y2cEventRegistration.count({ where: { eventId, status: 'CANCELLED' } }),
-      (this.prisma as any).y2cEventRegistration.count({ where: { eventId, attended: true } }),
+      prisma.y2CEventRegistration.count({ where: { eventId } }),
+      prisma.y2CEventRegistration.count({ where: { eventId, status: 'PENDING' } }),
+      prisma.y2CEventRegistration.count({ where: { eventId, status: 'CONFIRMED' } }),
+      prisma.y2CEventRegistration.count({ where: { eventId, status: 'CANCELLED' } }),
+      prisma.y2CEventRegistration.count({ where: { eventId, attended: true } }),
     ]);
 
     return { total, pending, confirmed, cancelled, attended };

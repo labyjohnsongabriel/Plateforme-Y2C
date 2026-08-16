@@ -7,16 +7,16 @@ import { ProjectRepository } from '../repositories/project.repository';
 import { ArticleRepository } from '../repositories/article.repository';
 import { logger } from '../config/logger';
 import * as XLSX from 'xlsx';
-// @ts-ignore – les types @types/pdfkit peuvent manquer
 import PDFDocument from 'pdfkit';
 import { PassThrough } from 'stream';
 
+// ✅ Correction des types avec les bonnes relations (majuscules)
 type RegistrationWithIncludes = Prisma.RegistrationGetPayload<{
-  include: { formation: true; session: true };
+  include: { Formation: true; FormationSession: true };
 }>;
 
 type ArticleWithAuthor = Prisma.ArticleGetPayload<{
-  include: { author: { select: { firstName: true; lastName: true } } };
+  include: { User: { select: { firstName: true; lastName: true } } };
 }>;
 
 export class ExportService {
@@ -45,8 +45,8 @@ export class ExportService {
     const registrations = await this.prisma.registration.findMany({
       where: filters,
       include: {
-        formation: true,
-        session: true,
+        Formation: true,
+        FormationSession: true,
       },
     }) as RegistrationWithIncludes[];
 
@@ -56,8 +56,8 @@ export class ExportService {
       'Nom': r.lastName,
       'Email': r.email,
       'Téléphone': r.phone,
-      'Formation': r.formation?.title || 'N/A',
-      'Session': r.session?.startDate ? new Date(r.session.startDate).toLocaleDateString() : 'N/A',
+      'Formation': r.Formation?.title || 'N/A',
+      'Session': r.FormationSession?.startDate ? new Date(r.FormationSession.startDate).toLocaleDateString() : 'N/A',
       'Statut': r.status,
       'Statut Paiement': r.paymentStatus,
       'Montant': r.paymentAmount || 0,
@@ -157,7 +157,7 @@ export class ExportService {
     const articles = await this.prisma.article.findMany({
       where: filters,
       include: {
-        author: {
+        User: {
           select: {
             firstName: true,
             lastName: true,
@@ -173,7 +173,7 @@ export class ExportService {
       'Catégorie': a.category,
       'Tags': a.tags.join(', '),
       'Statut': a.status,
-      'Auteur': `${a.author?.firstName || ''} ${a.author?.lastName || ''}`,
+      'Auteur': `${a.User?.firstName || ''} ${a.User?.lastName || ''}`,
       'Vues': a.views || 0,
       'Date Publication': a.publishedAt ? new Date(a.publishedAt).toLocaleDateString() : 'N/A',
     }));

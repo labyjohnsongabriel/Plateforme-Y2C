@@ -22,6 +22,7 @@ export class UploadController extends BaseController {
         throw new Error('User not authenticated');
       }
 
+      // ✅ Le service retourne déjà un objet avec l'URL absolue
       const result = await this.fileService.uploadFile(req.file, userId);
       this.sendCreated(res, result);
     } catch (error) {
@@ -57,7 +58,6 @@ export class UploadController extends BaseController {
     }
   };
 
-  // ✅ Appel corrigé : on passe directement l'objet de pagination (page, limit)
   getFiles = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);

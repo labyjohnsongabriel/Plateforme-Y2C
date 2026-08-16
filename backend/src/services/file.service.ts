@@ -1,3 +1,5 @@
+// backend/src/services/file.service.ts
+
 import { FileRepository } from '../repositories/file.repository';
 import cloudinary, { cloudinaryConfig } from '../config/cloudinary';
 import { ApiError } from '../utils/ApiError';
@@ -46,7 +48,7 @@ export class FileService {
         size = file.size;
       }
 
-      // ✅ Utiliser la relation Prisma : `user: { connect: { id: userId } }`
+      // ✅ Correction : utiliser la relation "User" (majuscule) au lieu de "user"
       return this.fileRepository.create({
         name: file.originalname,
         mimeType: file.mimetype,
@@ -56,7 +58,7 @@ export class FileService {
         format,
         width,
         height,
-        user: {
+        User: {
           connect: { id: userId }
         },
         folder: folder || cloudinaryConfig.folder,

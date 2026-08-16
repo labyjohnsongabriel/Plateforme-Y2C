@@ -1,3 +1,5 @@
+// backend/src/routes/registration.routes.ts
+
 import { Router } from 'express';
 import { RegistrationController } from '../controllers/registration.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';

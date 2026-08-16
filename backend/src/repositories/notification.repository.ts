@@ -1,5 +1,5 @@
 import { BaseRepository } from './base.repository';
-import { Prisma, Notification } from '@prisma/client';
+import { Notification, Prisma } from '@prisma/client';
 
 export class NotificationRepository extends BaseRepository<
   Notification,
@@ -11,72 +11,37 @@ export class NotificationRepository extends BaseRepository<
     super('notification');
   }
 
-  async findByUser(userId: string): Promise<Notification[]> {
+  async findByUserId(
+    userId: string,
+    options?: { take?: number; skip?: number }
+  ): Promise<Notification[]> {
+    const { take = 20, skip = 0 } = options || {};
     return this.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      take,
+      skip,
     });
   }
 
-  async findUnreadByUser(userId: string): Promise<Notification[]> {
-    return this.findMany({
+  async markAsRead(id: string): Promise<Notification> {
+    return this.update(id, { isRead: true });
+  }
+
+  async markAllAsRead(userId: string): Promise<{ count: number }> {
+    // Il faut utiliser this.updateMany ou similaire, mais BaseRepository pourrait ne pas avoir updateMany.
+    // On peut utiliser this.execute avec une transaction ou utiliser prisma directement.
+    // Mais pour simplifier, on peut utiliser prisma directement si on l'importe, mais on veut éviter.
+    // Ou on peut ajouter une méthode dans BaseRepository. Sinon, on peut utiliser this.model.updateMany.
+    // this.model est le Prisma Model, on peut faire this.model.updateMany.
+    const result = await this.model.updateMany({
       where: { userId, isRead: false },
-      orderBy: { createdAt: 'desc' },
+      data: { isRead: true },
     });
+    return { count: result.count };
   }
 
-  async findUnreadCount(userId: string): Promise<number> {
-    return this.count({
-      userId,
-      isRead: false,
-    });
-  }
-
-  async markAllAsRead(userId: string): Promise<number> {
-    const result = await this.execute(async () => {
-      return await this.model.updateMany({
-        where: { userId, isRead: false },
-        data: { isRead: true },
-      });
-    });
-    return result.count || 0;
-  }
-
-  async deleteAllByUser(userId: string): Promise<number> {
-    const result = await this.execute(async () => {
-      return await this.model.deleteMany({
-        where: { userId },
-      });
-    });
-    return result.count || 0;
-  }
-
-  async getStats(): Promise<{
-    total: number;
-    read: number;
-    unread: number;
-    byType: Record<string, number>;
-  }> {
-    const [total, read, unread] = await Promise.all([
-      this.count(),
-      this.count({ isRead: true }),
-      this.count({ isRead: false }),
-    ]);
-
-    const result = await this.execute(async () => {
-      return await this.model.groupBy({
-        by: ['type'],
-        _count: {
-          type: true,
-        },
-      });
-    });
-
-    const byType = result.reduce((acc: Record<string, number>, item: any) => {
-      acc[item.type] = item._count.type;
-      return acc;
-    }, {});
-
-    return { total, read, unread, byType };
+  async countUnread(userId: string): Promise<number> {
+    return this.count({ userId, isRead: false });
   }
 }

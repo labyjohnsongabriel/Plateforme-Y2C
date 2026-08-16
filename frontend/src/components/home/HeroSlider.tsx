@@ -1,169 +1,290 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import Image from 'next/image';
+import { ChevronLeft, ChevronRight, ArrowRight, Pause, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+// 📸 Images de qualité pour chaque slide (Unsplash - haute résolution)
 const slides = [
   {
-    id: 1,
-    title: 'Youth Computing',
-    subtitle: 'L\'avenir numérique de Madagascar',
-    description: 'Promotion des NTIC et de l\'inclusion numérique pour tous',
-    image: '/images/hero/slide-1.jpg',
+    id: 0,
+    title: 'La culture numérique pour tous',
+    subtitle: 'Youth Computing',
+    description: 'Promouvoir l\'inclusion numérique à Madagascar',
     cta: 'Découvrir',
     link: '/a-propos',
+    image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1600&q=80',
+    mobileImage: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&q=80',
+  },
+  {
+    id: 1,
+    title: 'Rejoignez la communauté Y2C',
+    subtitle: 'Une communauté de passionnés',
+    description: 'Échangez, apprenez et innovez ensemble',
+    cta: 'Adhérer',
+    link: '/communaute-y2c',
+    image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1600&q=80',
+    mobileImage: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&q=80',
   },
   {
     id: 2,
-    title: 'Formations Innovantes',
+    title: 'Formations de qualité',
     subtitle: 'Développez vos compétences',
-    description: 'Des formations pratiques dans les technologies du futur',
-    image: '/images/hero/slide-2.jpg',
+    description: 'Des programmes adaptés à tous les niveaux',
     cta: 'Voir les formations',
     link: '/formations',
-  },
-  {
-    id: 3,
-    title: 'Communauté Y2C',
-    subtitle: 'Rejoignez le mouvement',
-    description: 'Une communauté dynamique de passionnés des NTIC',
-    image: '/images/hero/slide-3.jpg',
-    cta: 'Adhérer',
-    link: '/communaute-y2c',
+    image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1600&q=80',
+    mobileImage: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80',
   },
 ];
 
-export default function HeroSlider() {
-  const [currentSlide, setCurrentSlide] = useState(0);
+export function HeroSlider() {
+  const [current, setCurrent] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [imagesLoaded, setImagesLoaded] = useState<boolean[]>([]);
 
+  // Préchargement des images
+  useEffect(() => {
+    const loadImages = async () => {
+      const loaded = await Promise.all(
+        slides.map((slide) => {
+          return new Promise<boolean>((resolve) => {
+            const img = new Image();
+            img.src = slide.image;
+            img.onload = () => resolve(true);
+            img.onerror = () => resolve(false);
+          });
+        })
+      );
+      setImagesLoaded(loaded);
+    };
+    loadImages();
+  }, []);
+
+  const next = useCallback(() => {
+    setCurrent((prev) => (prev + 1) % slides.length);
+  }, []);
+
+  const prev = useCallback(() => {
+    setCurrent((prev) => (prev - 1 + slides.length) % slides.length);
+  }, []);
+
+  const toggleAutoPlay = () => {
+    setIsAutoPlaying(!isAutoPlaying);
+  };
+
+  // Auto-play
   useEffect(() => {
     if (!isAutoPlaying) return;
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [isAutoPlaying]);
+    const timer = setInterval(next, 6000);
+    return () => clearInterval(timer);
+  }, [isAutoPlaying, next]);
 
-  const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % slides.length);
-    setIsAutoPlaying(false);
-  };
+  // Pause auto-play au survol
+  const [isHovering, setIsHovering] = useState(false);
 
-  const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
-    setIsAutoPlaying(false);
-  };
+  const currentSlide = slides[current];
+  const isImageLoaded = imagesLoaded[current] !== false;
 
   return (
-    <section className="relative h-[90vh] min-h-[600px] w-full overflow-hidden">
+    <section
+      className="relative h-[90vh] min-h-[600px] w-full overflow-hidden"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
       <AnimatePresence mode="wait">
         <motion.div
-          key={currentSlide}
-          initial={{ opacity: 0, scale: 1.1 }}
+          key={current}
+          initial={{ opacity: 0, scale: 1.05 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          transition={{ duration: 0.7 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
           className="absolute inset-0"
         >
-          <div className="relative h-full w-full">
-            <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent dark:from-black/80 dark:via-black/60 z-10" />
-            <Image
-              src={slides[currentSlide].image}
-              alt={slides[currentSlide].title}
-              fill
-              className="object-cover"
-              priority
-              quality={100}
+          {/* Image de fond avec overlay */}
+          <div className="absolute inset-0 bg-primary/40">
+            <img
+              src={currentSlide.image}
+              alt={currentSlide.title}
+              className={cn(
+                'h-full w-full object-cover transition-opacity duration-1000',
+                isImageLoaded ? 'opacity-100' : 'opacity-0'
+              )}
+              loading={current === 0 ? 'eager' : 'lazy'}
             />
+          </div>
+
+          {/* Overlay gradient élégant */}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-primary/50 via-transparent to-transparent" />
+
+          {/* Pattern décoratif */}
+          <div className="absolute inset-0 opacity-10">
+            <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <pattern
+                  id="grid"
+                  width="20"
+                  height="20"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <circle cx="2" cy="2" r="1" fill="white" />
+                </pattern>
+              </defs>
+              <rect width="100" height="100" fill="url(#grid)" />
+            </svg>
           </div>
         </motion.div>
       </AnimatePresence>
 
-      {/* Contenu */}
-      <div className="absolute inset-0 z-20 flex items-center">
-        <div className="container-custom">
+      {/* Contenu principal */}
+      <div className="relative z-10 flex h-full items-center px-4 sm:px-6 lg:px-8">
+        <div className="max-w-3xl">
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentSlide}
-              initial={{ opacity: 0, y: 30 }}
+              key={current}
+              initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -30 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="max-w-2xl"
+              exit={{ opacity: 0, y: -40 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="space-y-6"
             >
-              <span className="inline-block px-4 py-1.5 rounded-full bg-secondary text-white text-sm font-medium mb-4">
-                {slides[currentSlide].subtitle}
-              </span>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold font-ubuntu text-white mb-4">
-                {slides[currentSlide].title}
-              </h1>
-              <p className="text-lg md:text-xl text-white/80 mb-8">
-                {slides[currentSlide].description}
-              </p>
-              <Button
-                size="lg"
-                className="bg-secondary hover:bg-secondary/90 text-white"
-                onClick={() => {
-                  window.location.href = slides[currentSlide].link;
-                }}
+              {/* Badge de slide */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
               >
-                {slides[currentSlide].cta}
-              </Button>
+                <span className="inline-flex items-center gap-2 rounded-full bg-secondary/20 backdrop-blur-sm px-4 py-1.5 text-sm font-medium text-secondary border border-secondary/30">
+                  <span className="h-2 w-2 rounded-full bg-secondary animate-pulse" />
+                  {currentSlide.subtitle}
+                </span>
+              </motion.div>
+
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                className="font-ubuntu text-4xl font-bold text-white sm:text-5xl lg:text-6xl xl:text-7xl leading-tight"
+              >
+                {currentSlide.title}
+              </motion.h1>
+
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="text-lg text-white/80 sm:text-xl max-w-2xl leading-relaxed"
+              >
+                {currentSlide.description}
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="flex flex-wrap gap-4"
+              >
+                <Button
+                  size="lg"
+                  className="group bg-secondary text-white hover:bg-secondary/90 shadow-lg shadow-secondary/30 hover:shadow-secondary/50 transition-all duration-300"
+                  onClick={() => (window.location.href = currentSlide.link)}
+                >
+                  {currentSlide.cta}
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white/30 text-white hover:bg-white/10 hover:border-white/50 transition-all duration-300 backdrop-blur-sm"
+                  onClick={() => (window.location.href = '/formations')}
+                >
+                  Explorer
+                </Button>
+              </motion.div>
+
+              {/* Indicateur de slide */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="flex items-center gap-3 pt-4"
+              >
+                <span className="text-sm font-medium text-white/60">
+                  {String(current + 1).padStart(2, '0')}
+                </span>
+                <div className="h-px w-12 bg-white/20" />
+                <span className="text-sm font-medium text-white/40">
+                  {String(slides.length).padStart(2, '0')}
+                </span>
+              </motion.div>
             </motion.div>
           </AnimatePresence>
         </div>
       </div>
 
-      {/* Contrôles */}
-      <div className="absolute bottom-8 left-0 right-0 z-30 flex items-center justify-between container-custom">
-        <div className="flex items-center gap-4">
+      {/* Contrôles en bas */}
+      <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-4">
+        {/* Indicateurs */}
+        <div className="flex gap-2">
           {slides.map((_, index) => (
             <button
               key={index}
-              onClick={() => {
-                setCurrentSlide(index);
-                setIsAutoPlaying(false);
-              }}
+              onClick={() => setCurrent(index)}
               className={cn(
-                'h-2 rounded-full transition-all duration-300',
-                currentSlide === index
-                  ? 'w-8 bg-secondary'
-                  : 'w-2 bg-white/50 hover:bg-white/80'
+                'h-2 rounded-full transition-all duration-500 cursor-pointer',
+                index === current
+                  ? 'w-10 bg-secondary shadow-lg shadow-secondary/30'
+                  : 'w-2 bg-white/30 hover:bg-white/50'
               )}
+              aria-label={`Aller à la slide ${index + 1}`}
             />
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevSlide}
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm transition-colors"
-          >
-            <ChevronLeft className="h-5 w-5 text-white" />
-          </button>
-          <button
-            onClick={nextSlide}
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-sm transition-colors"
-          >
-            <ChevronRight className="h-5 w-5 text-white" />
-          </button>
-        </div>
+
+        {/* Séparateur */}
+        <span className="w-px h-6 bg-white/20" />
+
+        {/* Contrôle auto-play */}
+        <button
+          onClick={toggleAutoPlay}
+          className="text-white/50 hover:text-white transition-colors"
+          aria-label={isAutoPlaying ? 'Pause' : 'Lecture'}
+        >
+          {isAutoPlaying ? (
+            <Pause className="h-4 w-4" />
+          ) : (
+            <Play className="h-4 w-4" />
+          )}
+        </button>
       </div>
 
-      {/* Indicateur de progression */}
-      <div className="absolute bottom-0 left-0 z-30 h-1 bg-white/20 w-full">
-        <motion.div
-          className="h-full bg-secondary"
-          initial={{ width: 0 }}
-          animate={{ width: '100%' }}
-          transition={{ duration: 5, ease: 'linear' }}
-          key={currentSlide}
-        />
-      </div>
+      {/* Boutons de navigation */}
+      <button
+        onClick={prev}
+        className={cn(
+          'absolute left-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur-sm transition-all duration-300',
+          'hover:bg-white/20 hover:scale-110',
+          isHovering ? 'opacity-100' : 'opacity-0 lg:opacity-100'
+        )}
+        aria-label="Précédent"
+      >
+        <ChevronLeft className="h-6 w-6" />
+      </button>
+
+      <button
+        onClick={next}
+        className={cn(
+          'absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/10 p-3 text-white backdrop-blur-sm transition-all duration-300',
+          'hover:bg-white/20 hover:scale-110',
+          isHovering ? 'opacity-100' : 'opacity-0 lg:opacity-100'
+        )}
+        aria-label="Suivant"
+      >
+        <ChevronRight className="h-6 w-6" />
+      </button>
     </section>
   );
 }

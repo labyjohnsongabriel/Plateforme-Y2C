@@ -4,6 +4,7 @@ import { CreateProjectDTO, UpdateProjectDTO, CreateProjectMetricDTO } from '../t
 import { ApiError } from '../utils/ApiError';
 import { Project } from '@prisma/client';
 import { generateUniqueSlug } from '../utils/slugify';
+import { prisma } from '../config/prisma';
 
 export class ProjectService {
   private projectRepository: ProjectRepository;
@@ -18,26 +19,56 @@ export class ProjectService {
     return this.projectRepository.findMany(params);
   }
 
+  async findAllPaginated(page: number, limit: number) {
+    return this.projectRepository.findPaginated({
+      page,
+      limit,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async findById(id: string): Promise<Project> {
     return this.projectRepository.findByIdOrThrow(id);
   }
 
+  // ─── CREATE ────────────────────────────────────────────────
   async create(data: CreateProjectDTO): Promise<Project> {
-    const slug = await generateUniqueSlug(data.title, this.projectRepository, 'slug');
+    const cleanImages = data.images?.filter((url: string) => url && url.trim() !== '') || [];
+    const cleanProjectUrl = data.projectUrl && data.projectUrl.trim() !== '' ? data.projectUrl : null;
+    const cleanGithubUrl = data.githubUrl && data.githubUrl.trim() !== '' ? data.githubUrl : null;
+
+    // ✅ Appel avec 'project'
+    const slug = await generateUniqueSlug(data.title, 'project');
+
     return this.projectRepository.create({
       ...data,
       slug,
+      images: cleanImages,
+      projectUrl: cleanProjectUrl,
+      githubUrl: cleanGithubUrl,
       status: data.status || 'PLANNING',
     });
   }
 
+  // ─── UPDATE ────────────────────────────────────────────────
   async update(id: string, data: UpdateProjectDTO): Promise<Project> {
     const project = await this.projectRepository.findByIdOrThrow(id);
     let slug = project.slug;
     if (data.title && data.title !== project.title) {
-      slug = await generateUniqueSlug(data.title, this.projectRepository, 'slug');
+      slug = await generateUniqueSlug(data.title, 'project');
     }
-    return this.projectRepository.update(id, { ...data, slug });
+
+    const cleanImages = data.images?.filter((url: string) => url && url.trim() !== '') || undefined;
+    const cleanProjectUrl = data.projectUrl && data.projectUrl.trim() !== '' ? data.projectUrl : null;
+    const cleanGithubUrl = data.githubUrl && data.githubUrl.trim() !== '' ? data.githubUrl : null;
+
+    return this.projectRepository.update(id, {
+      ...data,
+      slug,
+      images: cleanImages,
+      projectUrl: cleanProjectUrl,
+      githubUrl: cleanGithubUrl,
+    });
   }
 
   async delete(id: string): Promise<void> {
@@ -75,12 +106,9 @@ export class ProjectService {
   // ============ METRICS ============
   async addMetric(projectId: string, data: CreateProjectMetricDTO): Promise<any> {
     await this.projectRepository.findByIdOrThrow(projectId);
-    // ✅ Utilisation de la relation Prisma
     return this.metricRepository.create({
       ...data,
-      project: {
-        connect: { id: projectId }
-      }
+      Project: { connect: { id: projectId } },
     });
   }
 

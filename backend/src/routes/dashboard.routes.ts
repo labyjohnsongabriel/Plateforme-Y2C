@@ -1,55 +1,20 @@
+// backend/src/routes/dashboard.routes.ts
 import { Router } from 'express';
 import { DashboardController } from '../controllers/dashboard.controller';
-import { authMiddleware } from '../middlewares/auth.middleware';
+import { authenticate } from '../middlewares/auth.middleware';
 import { isAdmin } from '../middlewares/role.middleware';
-import { cacheMiddleware } from '../middlewares/cache.middleware';
 
 const router = Router();
 const dashboardController = new DashboardController();
 
-// All dashboard routes require admin access
-router.use(authMiddleware, isAdmin);
+router.use(authenticate, isAdmin);
 
-router.get(
-  '/stats',
-  cacheMiddleware(60),
-  dashboardController.getStats
-);
-
-router.get(
-  '/quick-stats',
-  cacheMiddleware(60),
-  dashboardController.getQuickStats
-);
-
-router.get(
-  '/chart',
-  cacheMiddleware(60),
-  dashboardController.getChartData
-);
-
-router.get(
-  '/activities',
-  cacheMiddleware(60),
-  dashboardController.getRecentActivities
-);
-
-router.get(
-  '/notifications',
-  cacheMiddleware(60),
-  dashboardController.getNotifications
-);
-
-router.get(
-  '/performance',
-  cacheMiddleware(60),
-  dashboardController.getPerformance
-);
-
-router.get(
-  '/widgets',
-  cacheMiddleware(60),
-  dashboardController.getWidgets
-);
+router.get('/stats', dashboardController.getStats);
+router.get('/activities', dashboardController.getRecentActivities);
+router.get('/quick-stats', dashboardController.getQuickStats);
+router.get('/chart', dashboardController.getChartData);
+router.get('/performance', dashboardController.getPerformance);
+router.get('/widgets', dashboardController.getWidgets);
+router.get('/notifications', dashboardController.getNotifications);
 
 export default router;
