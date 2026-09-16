@@ -34,8 +34,8 @@ interface FormationFiltersProps {
 export function FormationFilters({ className, onFilterChange }: FormationFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({
-    category: '',
-    level: '',
+    category: 'all',
+    level: 'all',
     sortBy: 'createdAt',
     sortOrder: 'desc',
   });
@@ -50,14 +50,24 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
 
   const clearFilters = () => {
     setFilters({
-      category: '',
-      level: '',
+      category: 'all',
+      level: 'all',
       sortBy: 'createdAt',
       sortOrder: 'desc',
     });
   };
 
-  const activeFiltersCount = Object.values(filters).filter((v) => v && v !== 'createdAt' && v !== 'desc').length;
+  const activeFiltersCount = Object.entries(filters).filter(
+    ([key, value]) => value && value !== 'all' && key !== 'sortBy' && key !== 'sortOrder'
+  ).length;
+
+  // Fermer automatiquement après une sélection (sauf tri/ordre)
+  const handleSelectChange = (key: string, value: string) => {
+    handleFilterChange(key, value);
+    if (key !== 'sortBy' && key !== 'sortOrder') {
+      setIsOpen(false);
+    }
+  };
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -96,14 +106,14 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                 <div className="space-y-2">
                   <Label htmlFor="category">Catégorie</Label>
                   <Select
-                    value={filters.category}
-                    onValueChange={(value) => handleFilterChange('category', value)}
+                    value={filters.category || 'all'}
+                    onValueChange={(value) => handleSelectChange('category', value)}
                   >
                     <SelectTrigger id="category">
                       <SelectValue placeholder="Toutes" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Toutes les catégories</SelectItem>
+                      <SelectItem value="all">Toutes les catégories</SelectItem>
                       {CATEGORIES.map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat}
@@ -116,14 +126,14 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                 <div className="space-y-2">
                   <Label htmlFor="level">Niveau</Label>
                   <Select
-                    value={filters.level}
-                    onValueChange={(value) => handleFilterChange('level', value)}
+                    value={filters.level || 'all'}
+                    onValueChange={(value) => handleSelectChange('level', value)}
                   >
                     <SelectTrigger id="level">
                       <SelectValue placeholder="Tous" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Tous les niveaux</SelectItem>
+                      <SelectItem value="all">Tous les niveaux</SelectItem>
                       {LEVELS.map((lvl) => (
                         <SelectItem key={lvl} value={lvl}>
                           {lvl.charAt(0) + lvl.slice(1).toLowerCase()}
@@ -136,7 +146,7 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                 <div className="space-y-2">
                   <Label htmlFor="sortBy">Trier par</Label>
                   <Select
-                    value={filters.sortBy}
+                    value={filters.sortBy || 'createdAt'}
                     onValueChange={(value) => handleFilterChange('sortBy', value)}
                   >
                     <SelectTrigger id="sortBy">
@@ -154,7 +164,7 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                 <div className="space-y-2">
                   <Label htmlFor="sortOrder">Ordre</Label>
                   <Select
-                    value={filters.sortOrder}
+                    value={filters.sortOrder || 'desc'}
                     onValueChange={(value) => handleFilterChange('sortOrder', value)}
                   >
                     <SelectTrigger id="sortOrder">
@@ -170,7 +180,7 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {Object.entries(filters).map(([key, value]) => {
-                  if (!value || key === 'sortBy' || key === 'sortOrder') return null;
+                  if (!value || value === 'all' || key === 'sortBy' || key === 'sortOrder') return null;
                   const label = key === 'category' ? 'Catégorie' : key === 'level' ? 'Niveau' : key;
                   return (
                     <Badge
@@ -180,7 +190,7 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                     >
                       {label}: {value}
                       <button
-                        onClick={() => handleFilterChange(key, '')}
+                        onClick={() => handleFilterChange(key, 'all')}
                         className="ml-1 text-muted-foreground hover:text-foreground"
                       >
                         <X className="h-3 w-3" />
@@ -188,6 +198,12 @@ export function FormationFilters({ className, onFilterChange }: FormationFilters
                     </Badge>
                   );
                 })}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => setIsOpen(false)}>
+                  Fermer
+                </Button>
               </div>
             </div>
           </motion.div>

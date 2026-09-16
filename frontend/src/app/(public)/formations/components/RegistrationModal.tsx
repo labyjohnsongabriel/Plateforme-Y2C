@@ -25,7 +25,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ScrollArea } from '@/components/ui/scroll-area'; // ✅ Présent si installé
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Loader2,
   CheckCircle,
@@ -45,6 +58,8 @@ import {
   Building2,
   Users,
   Clock,
+  Check,
+  ChevronsUpDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formations } from '@/lib/api';
@@ -134,6 +149,7 @@ export function RegistrationModal({
   const [selectedSession, setSelectedSession] = useState<string | undefined>(sessionId);
   const [selectedSessionPrice, setSelectedSessionPrice] = useState<number>(formationPrice);
   const [selectedSessionData, setSelectedSessionData] = useState<FormationSession | null>(null);
+  const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
 
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
@@ -169,8 +185,7 @@ export function RegistrationModal({
       try {
         const response = await formations.getSessions(formationId);
         let rawData: FormationSession[] = [];
-
-        // Extraction robuste (comme dans votre code)
+        // Extraction robuste du tableau de sessions
         if (response?.data?.data && Array.isArray(response.data.data)) {
           rawData = response.data.data;
         } else if (response?.data && Array.isArray(response.data)) {
@@ -201,7 +216,6 @@ export function RegistrationModal({
           if (found) rawData = found;
         }
 
-        // Filtrer les sessions à venir
         const upcoming = rawData
           .filter((s) => new Date(s.startDate) > new Date())
           .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
@@ -253,6 +267,7 @@ export function RegistrationModal({
       setSelectedSessionData(session);
       onSessionChange?.(val);
       form.setValue('amountPaid', 0);
+      setSessionSearchOpen(false);
     }
   };
 
@@ -321,7 +336,6 @@ export function RegistrationModal({
     }
   };
 
-  // ─── Rendu ──────────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto p-0 sm:max-w-lg">
@@ -381,7 +395,7 @@ export function RegistrationModal({
           ) : (
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-                {/* ─── SECTION : Session (Select + ScrollArea) ── */}
+                {/* ─── SECTION : Session ────────────────────────── */}
                 <div className="space-y-2">
                   <FormLabel className="flex items-center gap-2 text-sm font-medium">
                     <Calendar className="h-4 w-4 text-secondary" />
@@ -420,49 +434,96 @@ export function RegistrationModal({
                       )}
                     </div>
                   ) : (
-                    // ✅ Sélecteur avec scroll
-                    <Select value={selectedSession} onValueChange={handleSessionChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Choisissez une session" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <ScrollArea className="h-60">
-                          {sessions.map((s) => {
-                            const placesLeft = (s.maxParticipants ?? 0) - (s.currentParticipants ?? 0);
-                            return (
-                              <SelectItem key={s.id} value={s.id}>
-                                <div className="flex flex-col items-start">
-                                  <span>
-                                    {new Date(s.startDate).toLocaleDateString('fr-FR', {
-                                      day: 'numeric',
-                                      month: 'short',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })}
-                                    {' – '}
-                                    {s.location}
-                                  </span>
-                                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                    {s.price !== undefined && s.price > 0 && (
-                                      <span>{s.price.toLocaleString()} Ar</span>
-                                    )}
-                                    <span>
-                                      {s.currentParticipants ?? 0} / {s.maxParticipants ?? '∞'} places
-                                    </span>
-                                    {placesLeft > 0 && placesLeft <= 5 && (
-                                      <span className="text-amber-600 font-semibold">
-                                        Plus que {placesLeft} place{placesLeft > 1 ? 's' : ''}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </ScrollArea>
-                      </SelectContent>
-                    </Select>
+                    // ─── Combobox avec recherche ────────────────
+                    <Popover open={sessionSearchOpen} onOpenChange={setSessionSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={sessionSearchOpen}
+                          className="w-full justify-between"
+                        >
+                          {selectedSession ? (
+                            (() => {
+                              const s = sessions.find((s) => s.id === selectedSession);
+                              return s ? (
+                                <span className="truncate">
+                                  {new Date(s.startDate).toLocaleDateString('fr-FR', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                  {' – '}
+                                  {s.location}
+                                  {s.price !== undefined && s.price > 0 && ` (${s.price.toLocaleString()} Ar)`}
+                                </span>
+                              ) : (
+                                'Sélectionner une session'
+                              );
+                            })()
+                          ) : (
+                            'Sélectionner une session'
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                        <Command>
+                          <CommandInput placeholder="Rechercher une session..." />
+                          <CommandList>
+                            <CommandEmpty>Aucune session trouvée.</CommandEmpty>
+                            <CommandGroup>
+                              <ScrollArea className="h-60">
+                                {sessions.map((s) => {
+                                  const isSelected = selectedSession === s.id;
+                                  const placesLeft = (s.maxParticipants ?? 0) - (s.currentParticipants ?? 0);
+                                  return (
+                                    <CommandItem
+                                      key={s.id}
+                                      value={s.id}
+                                      onSelect={() => handleSessionChange(s.id)}
+                                      className="flex flex-col items-start gap-1 py-2"
+                                    >
+                                      <div className="flex w-full items-center justify-between">
+                                        <span className="font-medium">
+                                          {new Date(s.startDate).toLocaleDateString('fr-FR', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                          })}
+                                          {' – '}
+                                          {s.location}
+                                        </span>
+                                        {isSelected && <Check className="h-4 w-4 text-primary" />}
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        {s.price !== undefined && s.price > 0 && (
+                                          <span className="flex items-center gap-1">
+                                            <Wallet className="h-3 w-3" />
+                                            {s.price.toLocaleString()} Ar
+                                          </span>
+                                        )}
+                                        <span className="flex items-center gap-1">
+                                          <Users className="h-3 w-3" />
+                                          {s.currentParticipants ?? 0} / {s.maxParticipants ?? '∞'}
+                                        </span>
+                                        {placesLeft > 0 && placesLeft <= 5 && (
+                                          <span className="text-amber-600 font-semibold">
+                                            Plus que {placesLeft} place{placesLeft > 1 ? 's' : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  );
+                                })}
+                              </ScrollArea>
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   {/* Détails de la session sélectionnée */}
                   {selectedSessionData && (
