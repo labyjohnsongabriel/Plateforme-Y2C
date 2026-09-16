@@ -4,6 +4,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSocket } from '@/hooks/useSocket';
 
+// ============================================================
+// TYPES
+// ============================================================
 export interface Notification {
   id: string;
   title: string;
@@ -12,123 +15,182 @@ export interface Notification {
   createdAt: string;
   link?: string;
   type?: 'info' | 'success' | 'warning' | 'error';
-  avatar?: string;         // 🖼️ image optionnelle
-  userId?: string;         // émetteur
+  avatar?: string;
 }
 
 interface UseNotificationsOptions {
-  /** Charge les notifs initiales (via API REST) */
-  fetcher?: () => Promise<Notification[]>;
-  /** Nom de l'événement socket écouté (défaut: 'notification') */
+  fetcher?: () => Promise<unknown>;
+  pollInterval?: number;
   eventName?: string;
 }
 
+// ============================================================
+// HELPER — Normalise la réponse en tableau
+// ============================================================
+function normalizeNotifications(raw: unknown): Notification[] {
+  if (!raw) return [];
+
+  // ✅ Cas 1 : déjà un tableau
+  if (Array.isArray(raw)) return raw as Notification[];
+
+  // ✅ Cas 2 : objet avec clé "data"
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+
+    if (Array.isArray(obj.data)) return obj.data as Notification[];
+    if (Array.isArray(obj.notifications))
+      return obj.notifications as Notification[];
+    if (Array.isArray(obj.items)) return obj.items as Notification[];
+    if (Array.isArray(obj.results)) return obj.results as Notification[];
+
+    // Cas 2b : objet paginé { data: { notifications: [...] } }
+    if (obj.data && typeof obj.data === 'object') {
+      const nested = obj.data as Record<string, unknown>;
+      if (Array.isArray(nested.notifications))
+        return nested.notifications as Notification[];
+      if (Array.isArray(nested.items)) return nested.items as Notification[];
+    }
+  }
+
+  // ⚠️ Rien de reconnu → tableau vide
+  console.warn('[useNotifications] Format inattendu:', raw);
+  return [];
+}
+
+// ============================================================
+// HOOK
+// ============================================================
 export function useNotifications({
   fetcher,
+  pollInterval = 30_000,
   eventName = 'notification',
 }: UseNotificationsOptions = {}) {
-  const { socket } = useSocket();
+  const { on, off, isConnected } = useSocket();
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // ─── Chargement initial ───
+  // ─── Chargement initial REST ───
   useEffect(() => {
+    if (!fetcher) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
-    (async () => {
+
+    const load = async () => {
       try {
-        if (fetcher) {
-          const data = await fetcher();
-          if (!cancelled) setNotifications(data);
-        }
+        const raw = await fetcher();
+        const data = normalizeNotifications(raw);
+        if (!cancelled) setNotifications(data);
       } catch (err) {
-        console.error('[useNotifications] fetch error:', err);
+        console.error('[useNotifications] fetch:', err);
+        if (!cancelled) setNotifications([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+
+    load();
+
     return () => {
       cancelled = true;
     };
   }, [fetcher]);
 
-  // ─── Écoute temps réel ───
+  // ─── Live socket ───
   useEffect(() => {
-    if (!socket) return;
+    if (!isConnected) return;
 
-    const handleNew = (notif: Notification) => {
+    const handleNew = (n: Notification) => {
+      if (!n || !n.id) return;
       setNotifications((prev) => {
-        // Éviter les doublons
-        if (prev.some((n) => n.id === notif.id)) return prev;
-        return [notif, ...prev];
+        const arr = Array.isArray(prev) ? prev : [];
+        if (arr.some((x) => x.id === n.id)) return arr;
+        return [n, ...arr];
       });
-
-      // 🔔 Son optionnel (désactivable)
-      try {
-        const audio = new Audio('/sounds/notification.mp3');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-      } catch {}
-
-      // 🌐 Notification navigateur
-      if (
-        typeof window !== 'undefined' &&
-        'Notification' in window &&
-        Notification.permission === 'granted'
-      ) {
-        new Notification(notif.title, { body: notif.message, icon: '/logo.png' });
-      }
     };
 
-    const handleUpdate = (notif: Notification) => {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notif.id ? { ...n, ...notif } : n))
-      );
+    const handleUpdate = (n: Partial<Notification> & { id: string }) => {
+      if (!n?.id) return;
+      setNotifications((prev) => {
+        const arr = Array.isArray(prev) ? prev : [];
+        return arr.map((x) => (x.id === n.id ? { ...x, ...n } : x));
+      });
     };
 
     const handleDelete = ({ id }: { id: string }) => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      if (!id) return;
+      setNotifications((prev) => {
+        const arr = Array.isArray(prev) ? prev : [];
+        return arr.filter((x) => x.id !== id);
+      });
     };
 
-    socket.on(eventName, handleNew);
-    socket.on(`${eventName}:update`, handleUpdate);
-    socket.on(`${eventName}:delete`, handleDelete);
+    on(eventName, handleNew);
+    on(`${eventName}:update`, handleUpdate);
+    on(`${eventName}:delete`, handleDelete);
+    on('notification:receive', handleNew); // alias
+    on('notification:updated', handleUpdate);
+    on('notification:delete', handleDelete);
 
     return () => {
-      socket.off(eventName, handleNew);
-      socket.off(`${eventName}:update`, handleUpdate);
-      socket.off(`${eventName}:delete`, handleDelete);
+      off(eventName, handleNew);
+      off(`${eventName}:update`, handleUpdate);
+      off(`${eventName}:delete`, handleDelete);
+      off('notification:receive', handleNew);
+      off('notification:updated', handleUpdate);
+      off('notification:delete', handleDelete);
     };
-  }, [socket, eventName]);
+  }, [isConnected, eventName, on, off]);
+
+  // ─── Polling fallback si socket down ───
+  useEffect(() => {
+    if (isConnected || !fetcher || pollInterval <= 0) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const raw = await fetcher();
+        setNotifications(normalizeNotifications(raw));
+      } catch {
+        /* ignore */
+      }
+    }, pollInterval);
+
+    return () => clearInterval(interval);
+  }, [isConnected, fetcher, pollInterval]);
 
   // ─── Actions ───
-  const markAsRead = useCallback(
-    (id: string) => {
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-      );
-      socket?.emit('notification:read', { id });
-    },
-    [socket]
-  );
+  const markAsRead = useCallback((id: string) => {
+    setNotifications((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.map((n) => (n.id === id ? { ...n, read: true } : n));
+    });
+  }, []);
 
   const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    socket?.emit('notification:read-all');
-  }, [socket]);
+    setNotifications((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.map((n) => ({ ...n, read: true }));
+    });
+  }, []);
 
-  const remove = useCallback(
-    (id: string) => {
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
-      socket?.emit('notification:delete', { id });
-    },
-    [socket]
-  );
+  const remove = useCallback((id: string) => {
+    setNotifications((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.filter((n) => n.id !== id);
+    });
+  }, []);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // ─── Sécurité : toujours un tableau ───
+  const safeNotifications = Array.isArray(notifications) ? notifications : [];
+  const unreadCount = safeNotifications.filter((n) => !n.read).length;
 
   return {
-    notifications,
+    notifications: safeNotifications,
     loading,
+    isConnected,
     unreadCount,
     markAsRead,
     markAllAsRead,
