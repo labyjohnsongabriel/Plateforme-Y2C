@@ -1,3 +1,5 @@
+// src/services/contact.service.ts
+
 import { BaseService } from './base.service';
 import { ContactMessageRepository } from '../repositories/contactMessage.repository';
 import { CreateContactMessageDTO, ReplyContactMessageDTO } from '../types/dto/contact.dto';
@@ -66,11 +68,12 @@ export class ContactService extends BaseService<ContactMessage, CreateContactMes
     return this.contactRepository.findByIdOrThrow(id);
   }
 
+  // ✅ Correction : utilise 'content' du DTO et le stocke dans 'replyContent'
   async replyToMessage(id: string, data: ReplyContactMessageDTO): Promise<ContactMessage> {
     const message = await this.contactRepository.findByIdOrThrow(id);
 
     const updated = await this.contactRepository.update(id, {
-      replyContent: data.replyContent,
+      replyContent: data.content, // ✅ stocke 'content' dans replyContent
       repliedBy: data.repliedBy,
       repliedAt: new Date(),
     });
@@ -84,7 +87,7 @@ export class ContactService extends BaseService<ContactMessage, CreateContactMes
           <p><strong>Votre message:</strong></p>
           <p>${message.message}</p>
           <p><strong>Notre réponse:</strong></p>
-          <p>${data.replyContent}</p>
+          <p>${data.content}</p>
           <p>L'équipe Youth Computing</p>
         `,
       });

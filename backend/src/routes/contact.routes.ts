@@ -1,15 +1,20 @@
+// src/routes/contact.routes.ts
+
 import { Router } from 'express';
 import { ContactController } from '../controllers/contact.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { isAdmin } from '../middlewares/role.middleware';
 import { validate } from '../middlewares/validate.middleware';
 import { contactRateLimiter } from '../middlewares/rateLimiter.middleware';
-import { createContactMessageValidator, replyContactMessageValidator } from '../validators/contact.validator';
+import {
+  createContactMessageValidator,
+  replyContactMessageValidator,
+} from '../validators/contact.validator';
 
 const router = Router();
 const contactController = new ContactController();
 
-// Public routes
+// Routes publiques
 router.post(
   '/',
   contactRateLimiter,
@@ -17,7 +22,7 @@ router.post(
   contactController.sendMessage
 );
 
-// Admin routes
+// Routes admin (authentifiées)
 router.get(
   '/',
   authMiddleware,
@@ -39,6 +44,7 @@ router.get(
   contactController.getMessage
 );
 
+// ✅ Route de réponse (avec validation corrigée)
 router.post(
   '/:id/reply',
   authMiddleware,

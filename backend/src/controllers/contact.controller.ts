@@ -1,3 +1,5 @@
+// src/controllers/contact.controller.ts
+
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { ContactService } from '../services/contact.service';
@@ -43,12 +45,12 @@ export class ContactController extends BaseController {
   replyToMessage = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const userId = req.user?.id; // ✅ utilisation de req.user
+      const userId = req.user?.id;
       if (!userId) {
         throw new Error('User not authenticated');
       }
       const result = await this.contactService.replyToMessage(id, {
-        ...req.body,
+        content: req.body.content, // ✅ attend 'content'
         repliedBy: userId,
       });
       this.sendSuccess(res, result, 'Reply sent successfully');

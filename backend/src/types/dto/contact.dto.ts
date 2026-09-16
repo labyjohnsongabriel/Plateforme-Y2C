@@ -1,3 +1,5 @@
+// src/types/dto/contact.dto.ts
+
 import { PaginationParams } from '../index';
 
 export interface ContactMessageDTO {
@@ -9,7 +11,7 @@ export interface ContactMessageDTO {
   isRead: boolean;
   repliedAt?: Date;
   repliedBy?: string;
-  replyContent?: string;
+  replyContent?: string; // stocké en base
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,8 +23,9 @@ export interface CreateContactMessageDTO {
   message: string;
 }
 
+// ✅ Correction : le champ envoyé par le frontend est 'content'
 export interface ReplyContactMessageDTO {
-  replyContent: string;
+  content: string;      // ✅ aligné avec le frontend
   repliedBy: string;
 }
 
