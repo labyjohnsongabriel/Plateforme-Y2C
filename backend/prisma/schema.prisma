@@ -8,7 +8,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ============ ENUMS ============
+// ═══════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════
+
 enum Role {
   SUPER_ADMIN
   ADMIN
@@ -97,7 +100,35 @@ enum ActivityType {
   EXPORT
 }
 
-// ============ MODELS ============
+enum ExportFormat {
+  CSV
+  EXCEL
+  PDF
+}
+
+enum ExportType {
+  FORMATIONS
+  INSCRIPTIONS
+  PAIEMENTS
+  MEMBRES_Y2C
+  ARTICLES
+  PROJETS
+  UTILISATEURS
+  RECRUTEMENTS
+  CANDIDATURES
+  CONTACTS
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODELS
+// ═══════════════════════════════════════════════════════════════
 
 model ActivityLog {
   id         String       @id @default(cuid())
@@ -111,6 +142,9 @@ model ActivityLog {
   createdAt  DateTime     @default(now())
   User       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
   @@map("activity_logs")
 }
 
@@ -133,6 +167,10 @@ model Article {
   User           User             @relation(fields: [authorId], references: [id], onDelete: SetNull)
   ArticleComment ArticleComment[]
 
+  @@index([authorId])
+  @@index([status])
+  @@index([slug])
+  @@index([createdAt])
   @@map("articles")
 }
 
@@ -150,12 +188,16 @@ model ArticleComment {
   ArticleComment       ArticleComment?  @relation("ArticleCommentToArticleComment", fields: [parentId], references: [id])
   other_ArticleComment ArticleComment[] @relation("ArticleCommentToArticleComment")
 
+  @@index([articleId])
+  @@index([parentId])
+  @@index([isApproved])
   @@map("article_comments")
 }
 
 model Candidature {
   id            String       @id @default(cuid())
   recruitmentId String
+  userId        String?
   fullName      String
   email         String
   phone         String
@@ -166,9 +208,14 @@ model Candidature {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   Recruitment   Recruitment  @relation(fields: [recruitmentId], references: [id], onDelete: Cascade)
+  User          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   Evaluation    Evaluation[]
   Interview     Interview[]
 
+  @@index([recruitmentId])
+  @@index([email])
+  @@index([status])
+  @@index([userId])
   @@map("candidatures")
 }
 
@@ -185,6 +232,9 @@ model ContactMessage {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  @@index([email])
+  @@index([isRead])
+  @@index([createdAt])
   @@map("contact_messages")
 }
 
@@ -200,6 +250,8 @@ model Evaluation {
   Candidature   Candidature @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
   User          User        @relation(fields: [evaluatorId], references: [id], onDelete: SetNull)
 
+  @@index([candidatureId])
+  @@index([evaluatorId])
   @@map("evaluations")
 }
 
@@ -222,6 +274,10 @@ model Event {
   updatedAt         DateTime            @updatedAt
   EventRegistration EventRegistration[]
 
+  @@index([slug])
+  @@index([eventType])
+  @@index([startDate])
+  @@index([isPublished])
   @@map("events")
 }
 
@@ -237,6 +293,9 @@ model EventRegistration {
   updatedAt DateTime @updatedAt
   Event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  @@index([eventId])
+  @@index([email])
+  @@index([status])
   @@map("event_registrations")
 }
 
@@ -256,6 +315,8 @@ model File {
   updatedAt DateTime @updatedAt
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([publicId])
   @@map("files")
 }
 
@@ -278,6 +339,10 @@ model Formation {
   FormationSession FormationSession[]
   Registration     Registration[]
 
+  @@index([slug])
+  @@index([category])
+  @@index([isPublished])
+  @@index([level])
   @@map("formations")
 }
 
@@ -296,6 +361,9 @@ model FormationSession {
   Formation           Formation      @relation(fields: [formationId], references: [id], onDelete: Cascade)
   Registration        Registration[]
 
+  @@index([formationId])
+  @@index([startDate])
+  @@index([status])
   @@map("formation_sessions")
 }
 
@@ -310,6 +378,8 @@ model Interview {
   updatedAt     DateTime    @updatedAt
   Candidature   Candidature @relation(fields: [candidatureId], references: [id], onDelete: Cascade)
 
+  @@index([candidatureId])
+  @@index([status])
   @@map("interviews")
 }
 
@@ -325,19 +395,27 @@ model Notification {
   updatedAt DateTime         @updatedAt
   User      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
   @@map("notifications")
 }
 
 model Partner {
-  id          String   @id @default(cuid())
-  name        String
-  logo        String?
-  website     String?
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  logo         String?
+  website      String?
+  description  String?
+  email        String?
+  phone        String?
+  displayOrder Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  @@index([isActive])
+  @@index([displayOrder])
   @@map("partners")
 }
 
@@ -354,9 +432,15 @@ model Payment {
   paidAt           DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+  deletedAt        DateTime? 
   Registration     Registration? @relation(fields: [registrationId], references: [id])
   Y2CMember        Y2CMember?    @relation(fields: [y2cMemberId], references: [id])
 
+  @@index([paymentReference])
+  @@index([status])
+  @@index([registrationId])
+  @@index([y2cMemberId])
+  @@index([createdAt])
   @@map("payments")
 }
 
@@ -381,6 +465,10 @@ model Project {
   ProjectMetric ProjectMetric[]
   User          User[]          @relation("UserProjects")
 
+  @@index([slug])
+  @@index([year])
+  @@index([category])
+  @@index([status])
   @@map("projects")
 }
 
@@ -394,6 +482,7 @@ model ProjectMetric {
   updatedAt   DateTime @updatedAt
   Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@index([projectId])
   @@map("project_metrics")
 }
 
@@ -411,6 +500,10 @@ model Recruitment {
   updatedAt    DateTime      @updatedAt
   Candidature  Candidature[]
 
+  @@index([slug])
+  @@index([department])
+  @@index([isActive])
+  @@index([deadline])
   @@map("recruitments")
 }
 
@@ -423,6 +516,8 @@ model RefreshToken {
   createdAt DateTime @default(now())
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([token])
+  @@index([userId])
   @@map("refresh_tokens")
 }
 
@@ -446,7 +541,30 @@ model Registration {
   Formation        Formation?         @relation(fields: [formationId], references: [id])
   FormationSession FormationSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
+  @@index([sessionId])
+  @@index([formationId])
+  @@index([email])
+  @@index([status])
   @@map("registrations")
+}
+
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  group       String   // par ex. 'general', 'security', 'email', 'public'
+  value       Json     // stocke les paramètres sous forme d'objet JSON
+  label       String?  // nom lisible pour l'UI
+  description String?  // aide contextuelle
+  isPublic    Boolean  @default(false) // accessible sans authentification
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  // Index pour les recherches fréquentes
+  @@index([group])
+  @@index([key])
+  @@index([isPublic])
+  @@unique([group, key]) // (optionnel) empêche les doublons au sein d'un groupe
+  @@map("settings")      // nom de la table en base
 }
 
 model TeamMember {
@@ -463,6 +581,8 @@ model TeamMember {
   updatedAt    DateTime @updatedAt
   User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([department])
+  @@index([isActive])
   @@map("team_members")
 }
 
@@ -484,20 +604,25 @@ model User {
   updatedAt     DateTime       @updatedAt
   ActivityLog   ActivityLog[]
   Article       Article[]
+  Candidature   Candidature[]
   Evaluation    Evaluation[]
   File          File[]
   Notification  Notification[]
   RefreshToken  RefreshToken[]
   TeamMember    TeamMember?
   Project       Project[]      @relation("UserProjects")
+  ExportHistory ExportHistory[] @relation("UserExports")
 
+  @@index([email])
+  @@index([role])
+  @@index([status])
   @@map("users")
 }
 
 model Y2CEvent {
   id                   String                 @id @default(cuid())
   title                String
-  slug                 String @unique
+  slug                 String                 @unique
   description          String
   eventType            EventType
   startDate            DateTime
@@ -512,6 +637,10 @@ model Y2CEvent {
   updatedAt            DateTime               @updatedAt
   Y2CEventRegistration Y2CEventRegistration[]
 
+  @@index([slug])
+  @@index([eventType])
+  @@index([startDate])
+  @@index([isPublished])
   @@map("y2c_events")
 }
 
@@ -529,6 +658,9 @@ model Y2CEventRegistration {
   updatedAt   DateTime @updatedAt
   Y2CEvent    Y2CEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  @@index([eventId])
+  @@index([email])
+  @@index([status])
   @@map("y2c_event_registrations")
 }
 
@@ -548,5 +680,29 @@ model Y2CMember {
   updatedAt         DateTime        @updatedAt
   Payment           Payment[]
 
+  @@index([email])
+  @@index([badgeNumber])
+  @@index([status])
   @@map("y2c_members")
+}
+
+model ExportHistory {
+  id          String       @id @default(cuid())
+  type        ExportType
+  format      ExportFormat
+  filters     Json?
+  fileName    String
+  fileUrl     String?
+  fileSize    Int?
+  status      ExportStatus @default(PENDING)
+  error       String?
+  requestedBy String
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+  User        User         @relation("UserExports", fields: [requestedBy], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([requestedBy])
+  @@map("export_histories")
 }
