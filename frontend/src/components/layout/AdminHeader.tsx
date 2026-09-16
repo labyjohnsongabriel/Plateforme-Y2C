@@ -1,10 +1,11 @@
+// src/components/layout/AdminHeader.tsx
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
   LogOut,
@@ -16,6 +17,16 @@ import {
   HelpCircle,
   UserCircle,
   Shield,
+  CheckCheck,
+  Trash2,
+  Inbox,
+  BellOff,
+  Info,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -43,28 +54,95 @@ import { useNotificationStore } from '@/store/notification.store';
 import { useSocket } from '@/contexts/SocketContext';
 import { cn, formatDate } from '@/lib/utils';
 import { AdminSearchOverlay } from './AdminSearchOverlay';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { showNotificationToast } from '../../lib/notification-utils';
+import { showNotificationToast } from '@/lib/notification-utils';
 import { buildImageUrl } from '@/lib/imageUtils';
 
-const roleColors: Record<string, string> = {
-  SUPER_ADMIN: 'bg-purple-500/20 text-purple-600 dark:bg-purple-500/30 dark:text-purple-400',
-  ADMIN: 'bg-blue-500/20 text-blue-600 dark:bg-blue-500/30 dark:text-blue-400',
-  EDITOR: 'bg-amber-500/20 text-amber-600 dark:bg-amber-500/30 dark:text-amber-400',
-  CONTRIBUTOR: 'bg-green-500/20 text-green-600 dark:bg-green-500/30 dark:text-green-400',
-  MEMBER: 'bg-gray-500/20 text-gray-600 dark:bg-gray-500/30 dark:text-gray-400',
+// ============================================================
+// CONFIG
+// ============================================================
+const ROLE_STYLES: Record<string, { color: string; label: string }> = {
+  SUPER_ADMIN: {
+    color:
+      'bg-purple-500/20 text-purple-600 dark:bg-purple-500/30 dark:text-purple-400',
+    label: 'Super Admin',
+  },
+  ADMIN: {
+    color:
+      'bg-blue-500/20 text-blue-600 dark:bg-blue-500/30 dark:text-blue-400',
+    label: 'Administrateur',
+  },
+  EDITOR: {
+    color:
+      'bg-amber-500/20 text-amber-600 dark:bg-amber-500/30 dark:text-amber-400',
+    label: 'Éditeur',
+  },
+  CONTRIBUTOR: {
+    color:
+      'bg-green-500/20 text-green-600 dark:bg-green-500/30 dark:text-green-400',
+    label: 'Contributeur',
+  },
+  MEMBER: {
+    color:
+      'bg-gray-500/20 text-gray-600 dark:bg-gray-500/30 dark:text-gray-400',
+    label: 'Membre',
+  },
 };
 
-const roleLabels: Record<string, string> = {
-  SUPER_ADMIN: 'Super Admin',
-  ADMIN: 'Administrateur',
-  EDITOR: 'Éditeur',
-  CONTRIBUTOR: 'Contributeur',
-  MEMBER: 'Membre',
+const NOTIF_TYPES: Record<
+  string,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    dot: string;
+  }
+> = {
+  info: {
+    icon: Info,
+    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    dot: 'bg-blue-500',
+  },
+  success: {
+    icon: CheckCircle2,
+    color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    dot: 'bg-emerald-500',
+  },
+  warning: {
+    icon: AlertTriangle,
+    color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    dot: 'bg-amber-500',
+  },
+  error: {
+    icon: XCircle,
+    color: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    dot: 'bg-red-500',
+  },
 };
 
+// ============================================================
+// HELPER — Garantit un tableau
+// ============================================================
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const obj = value as any;
+    if (Array.isArray(obj.data)) return obj.data;
+    if (Array.isArray(obj.notifications)) return obj.notifications;
+    if (Array.isArray(obj.items)) return obj.items;
+  }
+  return [];
+}
+
+// ============================================================
+// COMPOSANT
+// ============================================================
 export function AdminHeader() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -83,105 +161,150 @@ export function AdminHeader() {
   const [showScrolled, setShowScrolled] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [notifError, setNotifError] = useState<string | null>(null);
 
-  // --- Chargement des notifications (URL corrigée) ---
+  // ✅ Toujours un tableau
+  const safeNotifications = useMemo(
+    () => asArray<any>(notifications),
+    [notifications]
+  );
+
+  const role = user?.role || 'MEMBER';
+  const roleStyle = ROLE_STYLES[role] || ROLE_STYLES.MEMBER;
+
+  const initials = useMemo(() => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
+    }
+    return 'U';
+  }, [user?.firstName, user?.lastName]);
+
+  const fullName = useMemo(() => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    return 'Utilisateur';
+  }, [user?.firstName, user?.lastName]);
+
+  // ─── Chargement notifications ───
   const fetchNotifications = useCallback(async () => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
+      setNotifError(null);
+
       const [listRes, countRes] = await Promise.all([
         api.get('/notifications/my-notifications?limit=50'),
-        api.get('/notifications/unread-count'),
+        api.get('/notifications/unread-count').catch(() => ({ data: {} })),
       ]);
+
       const payload = listRes.data?.data ?? listRes.data;
-      const notifs = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : [];
+      const notifs = asArray<any>(payload);
+
       clearNotifications();
-      notifs.forEach((notif: any) => addNotification(notif));
-      const unreadFromApi = countRes.data?.data?.count ?? payload?.unreadCount;
+      notifs.forEach((n: any) => addNotification(n));
+
+      const unreadFromApi =
+        countRes.data?.data?.count ??
+        (payload as any)?.unreadCount;
       const unread =
         typeof unreadFromApi === 'number'
           ? unreadFromApi
           : notifs.filter((n: any) => !n.isRead).length;
+
       setUnreadCount(unread);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur chargement notifications:', error);
+      setNotifError(
+        error?.response?.data?.message || 'Erreur de chargement'
+      );
     } finally {
       setIsLoading(false);
     }
-  }, [addNotification, setUnreadCount, clearNotifications]);
+  }, [user, addNotification, setUnreadCount, clearNotifications]);
 
   useEffect(() => {
-    if (user) fetchNotifications();
-    else setIsLoading(false);
-  }, [user, fetchNotifications]);
+    fetchNotifications();
+  }, [fetchNotifications]);
 
-  // --- Socket.IO ---
+  // ─── Socket.IO (deps stables) ───
+  const notificationsRef = useRef(safeNotifications);
+  useEffect(() => {
+    notificationsRef.current = safeNotifications;
+  }, [safeNotifications]);
+
   useEffect(() => {
     if (!socket || !isConnected || !user?.id) return;
 
     socket.emit('room:join', { room: `user:${user.id}` });
 
-    const handleNewNotification = (data: any) => {
-      const exists = notifications.some((n) => n.id === data.id);
-      if (!exists) {
-        addNotification(data);
-        showNotificationToast({
-          title: data.title || 'Nouvelle notification',
-          message: data.message,
-          link: data.link,
-          icon: '🔔',
-        });
-      }
+    const handleNew = (data: any) => {
+      if (!data?.id) return;
+      const exists = notificationsRef.current.some((n) => n.id === data.id);
+      if (exists) return;
+
+      addNotification(data);
+      showNotificationToast({
+        title: data.title || 'Nouvelle notification',
+        message: data.message,
+        link: data.link,
+        icon: '🔔',
+      });
     };
 
-    const handleUnreadCount = (data: { count: number }) => {
-      setUnreadCount(data.count);
+    const handleCount = (data: { count: number }) => {
+      if (typeof data?.count === 'number') setUnreadCount(data.count);
     };
 
-    socket.on('new-notification', handleNewNotification);
-    socket.on('notification:receive', handleNewNotification);
-    socket.on('unread-count-update', (data: { count: number }) => setUnreadCount(data.count));
-    socket.on('notification:count', handleUnreadCount);
+    socket.on('new-notification', handleNew);
+    socket.on('notification:receive', handleNew);
+    socket.on('unread-count-update', handleCount);
+    socket.on('notification:count', handleCount);
 
     return () => {
-      socket.off('new-notification', handleNewNotification);
-      socket.off('notification:receive', handleNewNotification);
-      socket.off('unread-count-update');
-      socket.off('notification:count', handleUnreadCount);
+      socket.off('new-notification', handleNew);
+      socket.off('notification:receive', handleNew);
+      socket.off('unread-count-update', handleCount);
+      socket.off('notification:count', handleCount);
     };
-  }, [socket, isConnected, user?.id, addNotification, setUnreadCount, notifications]);
+    // ✅ Pas de `notifications` dans les deps (utilise ref)
+  }, [socket, isConnected, user?.id, addNotification, setUnreadCount]);
 
-  // --- Scroll ---
+  // ─── Scroll ───
   useEffect(() => {
     const handleScroll = () => setShowScrolled(window.scrollY > 10);
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // --- Raccourci clavier ---
+  // ─── Raccourci clavier ⌘K ───
   useEffect(() => {
-    const down = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         setSearchOpen(true);
       }
     };
-    document.addEventListener('keydown', down);
-    return () => document.removeEventListener('keydown', down);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  // --- Actions ---
-  const handleMarkAsRead = useCallback(async (id: string) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      markAsRead(id);
-    } catch (error) {
-      console.error('Erreur marquage notification:', error);
-    }
-  }, [markAsRead]);
+  // ─── Actions ───
+  const handleMarkAsRead = useCallback(
+    async (id: string) => {
+      try {
+        await api.put(`/notifications/${id}/read`);
+        markAsRead(id);
+      } catch (error) {
+        console.error('Erreur marquage notification:', error);
+      }
+    },
+    [markAsRead]
+  );
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -189,7 +312,7 @@ export function AdminHeader() {
       markAllAsRead();
       toast.success('Toutes les notifications ont été marquées comme lues');
     } catch (error) {
-      console.error('Erreur marquage toutes notifications:', error);
+      console.error('Erreur:', error);
       toast.error('Erreur lors du marquage');
     }
   }, [markAllAsRead]);
@@ -202,18 +325,9 @@ export function AdminHeader() {
 
   if (!user) return null;
 
-  const initials =
-    user.firstName && user.lastName
-      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-      : 'U';
-
-  const fullName =
-    user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Utilisateur';
-
-  const role = user.role || 'MEMBER';
-  const roleColor = roleColors[role] || 'bg-gray-500/20 text-gray-600';
-  const roleLabel = roleLabels[role] || role;
-
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
   return (
     <>
       <header
@@ -225,9 +339,12 @@ export function AdminHeader() {
         )}
       >
         <div className="flex h-16 items-center justify-between px-4 md:px-6">
-          {/* Logo et recherche */}
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            <Link href="/admin/dashboard" className="flex items-center gap-2.5 group">
+          {/* ═══════ LOGO + RECHERCHE ═══════ */}
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <Link
+              href="/admin/dashboard"
+              className="group flex items-center gap-2.5"
+            >
               <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 p-1 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md">
                 <Image
                   src="/images/Youth Computing.png"
@@ -238,17 +355,20 @@ export function AdminHeader() {
                   priority
                 />
               </div>
-              <span className="hidden sm:inline-block text-lg font-semibold text-foreground">
+              <span className="hidden text-lg font-semibold text-foreground sm:inline-block">
                 Youth <span className="text-secondary">Computing</span>
               </span>
-              <Badge variant="outline" className="hidden md:inline-flex text-[10px] uppercase h-5 ml-1">
+              <Badge
+                variant="outline"
+                className="ml-1 hidden h-5 text-[10px] uppercase md:inline-flex"
+              >
                 Admin
               </Badge>
             </Link>
 
             <Button
               variant="ghost"
-              className="hidden md:flex h-9 w-48 lg:w-64 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted/70 justify-start gap-2 text-sm border border-border/50"
+              className="hidden h-9 w-48 justify-start gap-2 rounded-full border border-border/50 bg-muted/50 text-sm text-muted-foreground hover:bg-muted/70 md:flex lg:w-64"
               onClick={() => setSearchOpen(true)}
             >
               <Search className="h-4 w-4" />
@@ -259,113 +379,260 @@ export function AdminHeader() {
             </Button>
           </div>
 
-          {/* Actions droite */}
+          {/* ═══════ ACTIONS DROITE ═══════ */}
           <div className="flex items-center gap-1.5">
+            {/* Statut Live */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50">
+                  <div
+                    className={cn(
+                      'hidden items-center gap-1.5 rounded-full border px-2 py-1 sm:flex',
+                      isConnected
+                        ? 'border-green-200 bg-green-50 dark:border-green-900/50 dark:bg-green-950/40'
+                        : 'border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-950/40'
+                    )}
+                  >
+                    {isConnected ? (
+                      <Wifi className="h-3 w-3 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <WifiOff className="h-3 w-3 text-gray-500" />
+                    )}
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                      {isConnected && (
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                      )}
+                      <span
+                        className={cn(
+                          'relative inline-flex h-2 w-2 rounded-full',
+                          isConnected ? 'bg-green-500' : 'bg-gray-400'
+                        )}
+                      />
                     </span>
-                    <span className="text-[10px] font-medium text-green-700 dark:text-green-400">
-                      En ligne
+                    <span
+                      className={cn(
+                        'text-[10px] font-medium',
+                        isConnected
+                          ? 'text-green-700 dark:text-green-400'
+                          : 'text-gray-600 dark:text-gray-400'
+                      )}
+                    >
+                      {isConnected ? 'En ligne' : 'Hors ligne'}
                     </span>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>Connecté en temps réel</p>
+                  <p>
+                    {isConnected
+                      ? 'Connecté en temps réel'
+                      : 'Reconnexion en cours...'}
+                  </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
             <ThemeToggle variant="ghost" size="icon" className="hidden sm:flex" />
 
-            {/* Notifications */}
+            {/* ═══════ NOTIFICATIONS ═══════ */}
             <Popover open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative rounded-full">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative rounded-full"
+                  aria-label={`Notifications ${
+                    unreadCount > 0 ? `(${unreadCount} non lues)` : ''
+                  }`}
+                >
                   <Bell className="h-5 w-5" />
                   {unreadCount > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-lg"
                     >
                       {unreadCount > 99 ? '99+' : unreadCount}
-                    </Badge>
+                    </motion.span>
                   )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="flex items-center justify-between border-b p-3">
-                  <span className="font-semibold">Notifications</span>
+
+              <PopoverContent
+                className="w-80 overflow-hidden rounded-2xl border-border/60 p-0 shadow-2xl sm:w-96"
+                align="end"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold">Notifications</span>
+                    {unreadCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="h-5 px-1.5 text-[10px] font-bold"
+                      >
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </Badge>
+                    )}
+                  </div>
                   {unreadCount > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 gap-1 px-2 text-xs"
+                      className="h-7 gap-1 px-2 text-xs"
                       onClick={handleMarkAllAsRead}
                     >
-                      Tout marquer lu
+                      <CheckCheck className="h-3 w-3" />
+                      Tout lire
                     </Button>
                   )}
                 </div>
 
-                <ScrollArea className="max-h-[300px]">
+                {/* Body */}
+                <ScrollArea className="max-h-[400px]">
                   {isLoading ? (
-                    <div className="space-y-2 p-4">
+                    <div className="space-y-3 p-4">
                       {Array.from({ length: 4 }).map((_, i) => (
-                        <Skeleton key={i} className="h-12 w-full" />
-                      ))}
-                    </div>
-                  ) : notifications.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-8 text-center">
-                      <Bell className="h-8 w-8 text-muted-foreground" />
-                      <p className="mt-2 text-sm text-muted-foreground">Aucune notification</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1 p-1">
-                      {notifications.slice(0, 20).map((notif) => (
-                        <div
-                          key={notif.id}
-                          className={cn(
-                            'flex cursor-pointer items-start gap-3 rounded-md p-3 transition-colors hover:bg-muted/50',
-                            !notif.isRead && 'bg-secondary/5'
-                          )}
-                          onClick={() => {
-                            if (!notif.isRead) handleMarkAsRead(notif.id);
-                            if (notif.link) {
-                              router.push(notif.link);
-                              setIsNotificationOpen(false);
-                            }
-                          }}
-                        >
-                          <div className="flex-1 space-y-1">
-                            <p className="text-sm font-medium">{notif.title}</p>
-                            <p className="text-xs text-muted-foreground">{notif.message}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {formatDate(notif.createdAt)}
-                            </p>
+                        <div key={i} className="flex items-start gap-3">
+                          <Skeleton className="h-9 w-9 rounded-full" />
+                          <div className="flex-1 space-y-1.5">
+                            <Skeleton className="h-3.5 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
                           </div>
-                          {!notif.isRead && <span className="mt-1 h-2 w-2 rounded-full bg-secondary" />}
                         </div>
                       ))}
+                    </div>
+                  ) : notifError ? (
+                    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+                        <XCircle className="h-6 w-6 text-red-500" />
+                      </div>
+                      <p className="text-sm font-medium text-foreground">
+                        Erreur de chargement
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {notifError}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-3"
+                        onClick={() => fetchNotifications()}
+                      >
+                        Réessayer
+                      </Button>
+                    </div>
+                  ) : safeNotifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+                      <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 ring-4 ring-emerald-500/5">
+                        <CheckCheck className="h-7 w-7 text-emerald-500" />
+                      </div>
+                      <p className="text-sm font-semibold text-foreground">
+                        Aucune notification
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Vous êtes à jour !
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/40">
+                      <AnimatePresence initial={false}>
+                        {safeNotifications.slice(0, 20).map((notif, i) => {
+                          const type = notif.type || 'info';
+                          const typeConfig =
+                            NOTIF_TYPES[type] || NOTIF_TYPES.info;
+                          const Icon = typeConfig.icon;
+
+                          return (
+                            <motion.div
+                              key={notif.id}
+                              initial={{ opacity: 0, y: -4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.02 }}
+                              className={cn(
+                                'group relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors',
+                                !notif.isRead
+                                  ? 'bg-secondary/5 hover:bg-secondary/10'
+                                  : 'hover:bg-muted/40'
+                              )}
+                              onClick={() => {
+                                if (!notif.isRead) handleMarkAsRead(notif.id);
+                                if (notif.link) {
+                                  router.push(notif.link);
+                                  setIsNotificationOpen(false);
+                                }
+                              }}
+                            >
+                              {/* Barre d'accent */}
+                              {!notif.isRead && (
+                                <span
+                                  className={cn(
+                                    'absolute bottom-2 left-0 top-2 w-0.5 rounded-r-full',
+                                    typeConfig.dot
+                                  )}
+                                />
+                              )}
+
+                              {/* Icône */}
+                              <div
+                                className={cn(
+                                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-2 ring-background',
+                                  typeConfig.color
+                                )}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </div>
+
+                              {/* Contenu */}
+                              <div className="min-w-0 flex-1">
+                                <p
+                                  className={cn(
+                                    'truncate text-sm leading-tight',
+                                    !notif.isRead
+                                      ? 'font-semibold text-foreground'
+                                      : 'font-medium text-foreground/90'
+                                  )}
+                                >
+                                  {notif.title}
+                                </p>
+                                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                  {notif.message}
+                                </p>
+                                <p className="mt-1 text-[10px] font-medium text-muted-foreground/70">
+                                  {formatDate(notif.createdAt)}
+                                </p>
+                              </div>
+
+                              {/* Dot non lu */}
+                              {!notif.isRead && (
+                                <span
+                                  className={cn(
+                                    'mt-1 h-2 w-2 shrink-0 rounded-full ring-2 ring-background',
+                                    typeConfig.dot
+                                  )}
+                                />
+                              )}
+                            </motion.div>
+                          );
+                        })}
+                      </AnimatePresence>
                     </div>
                   )}
                 </ScrollArea>
 
-                {notifications.length > 0 && (
-                  <div className="border-t p-2 text-center">
+                {/* Footer */}
+                {safeNotifications.length > 0 && (
+                  <div className="border-t border-border/50 bg-muted/20 p-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full text-xs"
+                      className="w-full justify-center gap-2 text-xs"
                       onClick={() => {
                         setIsNotificationOpen(false);
                         router.push('/admin/notifications');
                       }}
                     >
+                      <Inbox className="h-3 w-3" />
                       Voir toutes les notifications
                     </Button>
                   </div>
@@ -373,34 +640,49 @@ export function AdminHeader() {
               </PopoverContent>
             </Popover>
 
-            {/* Profil */}
+            {/* ═══════ PROFIL ═══════ */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-9 gap-2 rounded-full px-2 hover:bg-muted transition-all">
-                  <Avatar className="h-8 w-8 ring-2 ring-background shadow-md">
-                    <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} alt={fullName} />
-                    <AvatarFallback className="bg-secondary/10 text-secondary text-xs font-medium">
+                <Button
+                  variant="ghost"
+                  className="relative h-9 gap-2 rounded-full px-2 transition-all hover:bg-muted"
+                >
+                  <Avatar className="h-8 w-8 shadow-md ring-2 ring-background">
+                    <AvatarImage
+                      src={user.avatar ? buildImageUrl(user.avatar, false) : undefined}
+                      alt={fullName}
+                    />
+                    <AvatarFallback className="bg-secondary/10 text-xs font-medium text-secondary">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden text-sm font-medium lg:inline-block">{user.firstName}</span>
+                  <span className="hidden text-sm font-medium lg:inline-block">
+                    {user.firstName}
+                  </span>
                   <ChevronDown className="hidden h-4 w-4 text-muted-foreground lg:block" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 p-1.5">
                 <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-2">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} alt={fullName} />
-                      <AvatarFallback className="bg-secondary/10 text-secondary text-lg">
+                      <AvatarImage
+                        src={
+                          user.avatar ? buildImageUrl(user.avatar, false) : undefined
+                        }
+                        alt={fullName}
+                      />
+                      <AvatarFallback className="bg-secondary/10 text-lg text-secondary">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col space-y-0.5">
-                      <p className="font-semibold text-sm">{fullName}</p>
+                      <p className="text-sm font-semibold">{fullName}</p>
                       <p className="text-xs text-muted-foreground">{user.email}</p>
-                      <Badge className={cn('text-[10px] uppercase w-fit', roleColor)}>
-                        {roleLabel}
+                      <Badge
+                        className={cn('w-fit text-[10px] uppercase', roleStyle.color)}
+                      >
+                        {roleStyle.label}
                       </Badge>
                     </div>
                   </div>
@@ -449,7 +731,7 @@ export function AdminHeader() {
 
                 <DropdownMenuItem
                   onClick={handleLogout}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
                   Déconnexion
