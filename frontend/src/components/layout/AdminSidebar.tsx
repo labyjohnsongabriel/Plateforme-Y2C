@@ -1,9 +1,10 @@
+// src/components/admin/AdminSidebar.tsx
 'use client';
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { adminNavigation, isActiveRoute } from '@/config/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,18 +17,17 @@ import {
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-// ============================================================
-// TYPES (étendus pour badges et sections)
-// ============================================================
-interface NavItem {
+// ─── Types ──────────────────────────────────────────────────────
+export interface NavItem {
+  id?: string; // identifiant unique (optionnel, sinon on utilise href)
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
   exact?: boolean;
   children?: NavItem[];
-  badge?: string | number; // Nouveau : badge (ex: "12", "3")
-  section?: string; // Nouveau : pour grouper les items
+  badge?: string | number;
+  section?: string;
 }
 
 interface AdminSidebarProps {
@@ -35,34 +35,172 @@ interface AdminSidebarProps {
   onToggleCollapse?: () => void;
 }
 
-// ============================================================
-// COMPOSANT PRINCIPAL
-// ============================================================
+// ─── Composants internes ──────────────────────────────────────
+
+const NavLinkItem = ({
+  item,
+  isActive,
+  depth,
+  collapsed,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  depth: number;
+  collapsed: boolean;
+}) => {
+  const Icon = item.icon;
+  const linkContent = (
+    <Link
+      href={item.href === '#' ? '#' : item.href}
+      className={cn(
+        'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+        isActive
+          ? 'bg-secondary text-white shadow-sm'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        depth > 0 && 'pl-8',
+        collapsed && 'h-10 w-10 justify-center px-0'
+      )}
+      aria-current={isActive ? 'page' : undefined}
+      onClick={(e) => {
+        if (item.href === '#') e.preventDefault();
+      }}
+    >
+      <Icon className={cn('h-4 w-4 flex-shrink-0', collapsed && 'h-5 w-5')} />
+      {!collapsed && (
+        <>
+          <span className="flex-1">{item.label}</span>
+          {item.badge && (
+            <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+              {item.badge}
+            </Badge>
+          )}
+        </>
+      )}
+      {collapsed && item.badge && (
+        <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[8px] font-bold text-white">
+          {item.badge}
+        </span>
+      )}
+    </Link>
+  );
+
+  if (collapsed) {
+    return (
+      <TooltipProvider key={item.id || item.href}>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+          <TooltipContent side="right">
+            <p>{item.label}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return linkContent;
+};
+
+const NavSectionItem = ({
+  item,
+  isActive,
+  isOpen,
+  depth,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  item: NavItem;
+  isActive: boolean;
+  isOpen: boolean;
+  depth: number;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) => {
+  const Icon = item.icon;
+
+  if (collapsed) {
+    return (
+      <TooltipProvider key={item.id || item.href}>
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <button
+              className={cn(
+                'relative flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-200',
+                isActive
+                  ? 'bg-secondary text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+              onClick={onToggle}
+              aria-expanded={isOpen}
+            >
+              <Icon className="h-5 w-5" />
+              {item.badge && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[8px] font-bold text-white">
+                  {item.badge}
+                </span>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>{item.label}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <button
+        onClick={onToggle}
+        className={cn(
+          'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+          isActive
+            ? 'bg-secondary text-white shadow-sm'
+            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+        )}
+        aria-expanded={isOpen}
+      >
+        <Icon className="h-4 w-4 flex-shrink-0" />
+        <span className="flex-1 text-left">{item.label}</span>
+        {item.badge && (
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+            {item.badge}
+          </Badge>
+        )}
+        <span className="ml-auto text-muted-foreground/50">
+          {isOpen ? (
+            <ChevronDown className="h-3 w-3 transition-transform duration-200" />
+          ) : (
+            <ChevronRight className="h-3 w-3 transition-transform duration-200" />
+          )}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="ml-2 overflow-hidden border-l-2 border-border pl-2"
+          >
+            {children}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ─── Composant principal ──────────────────────────────────────
+
 export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
   const userRole = user?.role || 'VIEWER';
-
-  // État pour ouvrir/fermer les sous-menus
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
-    // Par défaut, ouvrir les sections contenant la route active
-    const initial: Record<string, boolean> = {};
-    const traverse = (items: NavItem[]) => {
-      for (const item of items) {
-        if (item.children) {
-          const hasActiveChild = item.children.some((child) =>
-            isActiveRoute(pathname, child.href, child.exact)
-          );
-          if (hasActiveChild) {
-            initial[item.href] = true;
-          }
-          traverse(item.children);
-        }
-      }
-    };
-    traverse(adminNavigation);
-    return initial;
-  });
 
   // Filtrer la navigation selon le rôle
   const filteredNav = useMemo(() => {
@@ -89,148 +227,103 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
     return filterItems(adminNavigation);
   }, [userRole]);
 
-  // Basculer l'état d'un sous-menu
-  const toggleSection = (href: string) => {
-    setOpenSections((prev) => ({
-      ...prev,
-      [href]: !prev[href],
-    }));
-  };
+  // État d'ouverture des sous-menus (un seul ouvert à la fois pour un rendu professionnel)
+  const [openSectionId, setOpenSectionId] = useState<string | null>(null);
 
-  // Rendu récursif des items
-  const renderNavItem = (item: NavItem, depth = 0): JSX.Element => {
-    const isActive = isActiveRoute(pathname, item.href, item.exact);
-    const hasChildren = !!(item.children && item.children.length > 0);
-    const isOpen = openSections[item.href] || false;
-    const itemKey = item.href + item.label;
+  // Initialisation : ouvrir la section qui contient la page active
+  useEffect(() => {
+    const findActiveSection = (items: NavItem[], parentId?: string): string | null => {
+      for (const item of items) {
+        if (item.children) {
+          const hasActiveChild = item.children.some((child) =>
+            isActiveRoute(pathname, child.href, child.exact)
+          );
+          if (hasActiveChild) {
+            return item.id || item.href;
+          }
+          // Parcours récursif
+          const nested = findActiveSection(item.children, item.id || item.href);
+          if (nested) return nested;
+        }
+      }
+      return null;
+    };
+    const activeId = findActiveSection(filteredNav);
+    if (activeId) {
+      setOpenSectionId(activeId);
+    } else {
+      // Optionnel : ouvrir la première section par défaut ?
+      // setOpenSectionId(null);
+    }
+  }, [pathname, filteredNav]);
 
-    // --- Mode "collapsed" (icônes seules) ---
+  // Quand le menu est réduit, on ferme toutes les sections
+  useEffect(() => {
     if (collapsed) {
-      // On affiche uniquement les éléments sans enfants ou alors on affiche juste l'icône avec tooltip
-      return (
-        <TooltipProvider key={itemKey}>
-          <Tooltip delayDuration={200}>
-            <TooltipTrigger asChild>
-              <Link
-                href={item.href === '#' ? '#' : item.href}
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-200',
-                  isActive
-                    ? 'bg-secondary text-white shadow-sm'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
-                aria-current={isActive ? 'page' : undefined}
-                onClick={(e) => {
-                  if (item.href === '#') e.preventDefault();
-                  if (hasChildren && !collapsed) toggleSection(item.href);
-                }}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.badge && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-secondary text-[8px] font-bold text-white">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>{item.label}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      );
+      setOpenSectionId(null);
     }
+  }, [collapsed]);
 
-    // --- Mode normal ---
-    // Si l'élément a une section, on le rend comme un titre de groupe
-    if (item.section && !collapsed) {
-      return (
-        <div key={itemKey} className="mt-4 first:mt-0">
-          <div className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-            {item.section}
-          </div>
-          <div className="mt-1 space-y-0.5">
-            {item.children?.map((child) => renderNavItem(child, depth))}
-          </div>
-        </div>
-      );
-    }
+  // Basculer l'ouverture d'une section (ferme les autres)
+  const toggleSection = useCallback((sectionId: string) => {
+    setOpenSectionId((prev) => (prev === sectionId ? null : sectionId));
+  }, []);
 
-    // Élément avec enfants (sous-menu)
-    if (hasChildren) {
-      return (
-        <div key={itemKey} className="space-y-0.5">
-          <button
-            onClick={() => toggleSection(item.href)}
-            className={cn(
-              'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-              isActive
-                ? 'bg-secondary text-white shadow-sm'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
+  // Rendu récursif
+  const renderNavItem = useCallback(
+    (item: NavItem, depth = 0): JSX.Element | null => {
+      const isActive = isActiveRoute(pathname, item.href, item.exact);
+      const hasChildren = !!(item.children && item.children.length > 0);
+      const sectionId = item.id || item.href;
+      const isOpen = openSectionId === sectionId;
+      const key = item.id || `${item.href}-${item.label}`;
+
+      // Groupe de section (titre)
+      if (item.section && !collapsed) {
+        return (
+          <div key={key} className="mt-4 first:mt-0">
+            <div className="px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {item.section}
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {item.children?.map((child) => renderNavItem(child, depth))}
+            </div>
+          </div>
+        );
+      }
+
+      // Élément avec sous-menu
+      if (hasChildren) {
+        return (
+          <NavSectionItem
+            key={key}
+            item={item}
+            isActive={isActive}
+            isOpen={isOpen}
+            depth={depth}
+            collapsed={collapsed}
+            onToggle={() => toggleSection(sectionId)}
           >
-            <item.icon className="h-4 w-4 flex-shrink-0" />
-            <span className="flex-1 text-left">{item.label}</span>
-            {item.badge && (
-              <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                {item.badge}
-              </Badge>
-            )}
-            <span className="ml-auto text-muted-foreground/50">
-              {isOpen ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-            </span>
-          </button>
+            {item.children!.map((child) => renderNavItem(child, depth + 1))}
+          </NavSectionItem>
+        );
+      }
 
-          <AnimatePresence>
-            {isOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="ml-2 overflow-hidden border-l-2 border-border pl-2"
-              >
-                {item.children!.map((child) => renderNavItem(child, depth + 1))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+      // Élément simple (feuille)
+      return (
+        <NavLinkItem
+          key={key}
+          item={item}
+          isActive={isActive}
+          depth={depth}
+          collapsed={collapsed}
+        />
       );
-    }
+    },
+    [pathname, collapsed, openSectionId, toggleSection]
+  );
 
-    // Élément simple (feuille)
-    return (
-      <Link
-        key={itemKey}
-        href={item.href === '#' ? '#' : item.href}
-        className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
-          isActive
-            ? 'bg-secondary text-white shadow-sm'
-            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-          depth > 0 && 'pl-8'
-        )}
-        aria-current={isActive ? 'page' : undefined}
-        onClick={(e) => {
-          if (item.href === '#') e.preventDefault();
-        }}
-      >
-        <item.icon className="h-4 w-4 flex-shrink-0" />
-        <span className="flex-1">{item.label}</span>
-        {item.badge && (
-          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-            {item.badge}
-          </Badge>
-        )}
-      </Link>
-    );
-  };
-
-  // Séparer les éléments avec section et sans section pour un meilleur rendu
+  // Séparer les éléments avec et sans section
   const itemsWithSection = filteredNav.filter((item) => item.section);
   const itemsWithoutSection = filteredNav.filter((item) => !item.section);
 
@@ -250,9 +343,7 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
       )}
       aria-label="Navigation principale"
     >
-      {/* Affichage des éléments sans section d'abord */}
       {itemsWithoutSection.map((item) => renderNavItem(item))}
-      {/* Puis les sections */}
       {itemsWithSection.map((item) => renderNavItem(item))}
     </nav>
   );

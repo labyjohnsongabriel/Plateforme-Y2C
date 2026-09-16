@@ -11,6 +11,7 @@ import { Separator } from '../ui/separator';
 import { cn } from '../../lib/utils';
 import { publicNavigation } from '../../config/navigation';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildImageUrl } from '@/lib/imageUtils';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -72,7 +73,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             {isAuthenticated && user && (
               <div className="mt-6 flex items-center gap-3 rounded-lg bg-muted/50 p-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage src={user.avatar} />
+                  <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} />
                   <AvatarFallback className="bg-secondary/10 text-secondary">
                     {initials}
                   </AvatarFallback>

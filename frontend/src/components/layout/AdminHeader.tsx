@@ -1,12 +1,10 @@
-// src/components/admin/AdminHeader.tsx
-
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Bell,
   LogOut,
@@ -16,7 +14,6 @@ import {
   Search,
   ChevronDown,
   HelpCircle,
-  LifeBuoy,
   UserCircle,
   Shield,
 } from 'lucide-react';
@@ -39,10 +36,9 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/hooks/useAuth'; // cohérence
+import { useAuth } from '@/hooks/useAuth';
 import { useNotificationStore } from '@/store/notification.store';
 import { useSocket } from '@/contexts/SocketContext';
 import { cn, formatDate } from '@/lib/utils';
@@ -50,8 +46,9 @@ import { AdminSearchOverlay } from './AdminSearchOverlay';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { showNotificationToast } from '../../lib/notification-utils';
+import { buildImageUrl } from '@/lib/imageUtils';
 
-// ─── Configuration des rôles ──────────────────────────────
 const roleColors: Record<string, string> = {
   SUPER_ADMIN: 'bg-purple-500/20 text-purple-600 dark:bg-purple-500/30 dark:text-purple-400',
   ADMIN: 'bg-blue-500/20 text-blue-600 dark:bg-blue-500/30 dark:text-blue-400',
@@ -79,6 +76,7 @@ export function AdminHeader() {
     markAllAsRead,
     addNotification,
     setUnreadCount,
+    clearNotifications,
   } = useNotificationStore();
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -86,59 +84,84 @@ export function AdminHeader() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ─── Chargement initial des notifications ─────────────────
+  // --- Chargement des notifications (URL corrigée) ---
   const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await api.get('/notifications');
-      const data = response.data?.data || response.data || [];
-      // Normalisation en tableau
-      const notifs = Array.isArray(data) ? data : [];
+      const [listRes, countRes] = await Promise.all([
+        api.get('/notifications/my-notifications?limit=50'),
+        api.get('/notifications/unread-count'),
+      ]);
+      const payload = listRes.data?.data ?? listRes.data;
+      const notifs = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : [];
+      clearNotifications();
       notifs.forEach((notif: any) => addNotification(notif));
-      const unread = notifs.filter((n: any) => !n.isRead).length;
+      const unreadFromApi = countRes.data?.data?.count ?? payload?.unreadCount;
+      const unread =
+        typeof unreadFromApi === 'number'
+          ? unreadFromApi
+          : notifs.filter((n: any) => !n.isRead).length;
       setUnreadCount(unread);
     } catch (error) {
       console.error('Erreur chargement notifications:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [addNotification, setUnreadCount]);
+  }, [addNotification, setUnreadCount, clearNotifications]);
 
   useEffect(() => {
     if (user) fetchNotifications();
     else setIsLoading(false);
   }, [user, fetchNotifications]);
 
-  // ─── Socket.IO temps réel ──────────────────────────────────
+  // --- Socket.IO ---
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!socket || !isConnected || !user?.id) return;
+
+    socket.emit('room:join', { room: `user:${user.id}` });
 
     const handleNewNotification = (data: any) => {
-      addNotification(data);
-      toast.success(data.title, { duration: 5000 });
+      const exists = notifications.some((n) => n.id === data.id);
+      if (!exists) {
+        addNotification(data);
+        showNotificationToast({
+          title: data.title || 'Nouvelle notification',
+          message: data.message,
+          link: data.link,
+          icon: '🔔',
+        });
+      }
     };
 
     const handleUnreadCount = (data: { count: number }) => {
       setUnreadCount(data.count);
     };
 
+    socket.on('new-notification', handleNewNotification);
     socket.on('notification:receive', handleNewNotification);
+    socket.on('unread-count-update', (data: { count: number }) => setUnreadCount(data.count));
     socket.on('notification:count', handleUnreadCount);
 
     return () => {
+      socket.off('new-notification', handleNewNotification);
       socket.off('notification:receive', handleNewNotification);
+      socket.off('unread-count-update');
       socket.off('notification:count', handleUnreadCount);
     };
-  }, [socket, isConnected, addNotification, setUnreadCount]);
+  }, [socket, isConnected, user?.id, addNotification, setUnreadCount, notifications]);
 
-  // ─── Détection du scroll ──────────────────────────────────
+  // --- Scroll ---
   useEffect(() => {
     const handleScroll = () => setShowScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // ─── Raccourci clavier recherche ──────────────────────────
+  // --- Raccourci clavier ---
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -150,10 +173,10 @@ export function AdminHeader() {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  // ─── Actions notifications ────────────────────────────────
+  // --- Actions ---
   const handleMarkAsRead = useCallback(async (id: string) => {
     try {
-      await api.patch(`/notifications/${id}/read`);
+      await api.put(`/notifications/${id}/read`);
       markAsRead(id);
     } catch (error) {
       console.error('Erreur marquage notification:', error);
@@ -162,10 +185,12 @@ export function AdminHeader() {
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
-      await api.post('/notifications/read-all');
+      await api.put('/notifications/read-all');
       markAllAsRead();
+      toast.success('Toutes les notifications ont été marquées comme lues');
     } catch (error) {
       console.error('Erreur marquage toutes notifications:', error);
+      toast.error('Erreur lors du marquage');
     }
   }, [markAllAsRead]);
 
@@ -175,25 +200,20 @@ export function AdminHeader() {
     toast.success('Déconnexion réussie');
   }, [logout, router]);
 
-  // ─── Gestion de l'absence d'utilisateur ──────────────────
   if (!user) return null;
 
-  // ─── Calcul des initiales ─────────────────────────────────
   const initials =
     user.firstName && user.lastName
       ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
       : 'U';
 
   const fullName =
-    user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
-      : 'Utilisateur';
+    user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : 'Utilisateur';
 
   const role = user.role || 'MEMBER';
   const roleColor = roleColors[role] || 'bg-gray-500/20 text-gray-600';
   const roleLabel = roleLabels[role] || role;
 
-  // ─── Rendu ──────────────────────────────────────────────────
   return (
     <>
       <header
@@ -205,34 +225,27 @@ export function AdminHeader() {
         )}
       >
         <div className="flex h-16 items-center justify-between px-4 md:px-6">
-          {/* Logo */}
+          {/* Logo et recherche */}
           <div className="flex items-center gap-4 flex-1 min-w-0">
-            <motion.div
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-2 font-ubuntu"
-            >
-              <Link href="/admin/dashboard" className="flex items-center gap-2.5 group">
-                <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 p-1 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md">
-                  <Image
-                    src="/images/Youth Computing.png"
-                    alt="Youth Computing"
-                    width={36}
-                    height={36}
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-                <span className="hidden sm:inline-block text-lg font-semibold text-foreground">
-                  Youth <span className="text-secondary">Computing</span>
-                </span>
-                <Badge variant="outline" className="hidden md:inline-flex text-[10px] uppercase h-5 ml-1">
-                  Admin
-                </Badge>
-              </Link>
-            </motion.div>
+            <Link href="/admin/dashboard" className="flex items-center gap-2.5 group">
+              <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 p-1 transition-all duration-300 group-hover:scale-105 group-hover:shadow-md">
+                <Image
+                  src="/images/Youth Computing.png"
+                  alt="Youth Computing"
+                  width={36}
+                  height={36}
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="hidden sm:inline-block text-lg font-semibold text-foreground">
+                Youth <span className="text-secondary">Computing</span>
+              </span>
+              <Badge variant="outline" className="hidden md:inline-flex text-[10px] uppercase h-5 ml-1">
+                Admin
+              </Badge>
+            </Link>
 
-            {/* Barre de recherche */}
             <Button
               variant="ghost"
               className="hidden md:flex h-9 w-48 lg:w-64 rounded-full bg-muted/50 text-muted-foreground hover:bg-muted/70 justify-start gap-2 text-sm border border-border/50"
@@ -248,14 +261,13 @@ export function AdminHeader() {
 
           {/* Actions droite */}
           <div className="flex items-center gap-1.5">
-            {/* Statut connexion */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                     </span>
                     <span className="text-[10px] font-medium text-green-700 dark:text-green-400">
                       En ligne
@@ -273,12 +285,7 @@ export function AdminHeader() {
             {/* Notifications */}
             <Popover open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
               <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="relative rounded-full"
-                  aria-label="Notifications"
-                >
+                <Button variant="ghost" size="icon" className="relative rounded-full">
                   <Bell className="h-5 w-5" />
                   {unreadCount > 0 && (
                     <Badge
@@ -341,9 +348,7 @@ export function AdminHeader() {
                               {formatDate(notif.createdAt)}
                             </p>
                           </div>
-                          {!notif.isRead && (
-                            <span className="mt-1 h-2 w-2 rounded-full bg-secondary" />
-                          )}
+                          {!notif.isRead && <span className="mt-1 h-2 w-2 rounded-full bg-secondary" />}
                         </div>
                       ))}
                     </div>
@@ -371,20 +376,14 @@ export function AdminHeader() {
             {/* Profil */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="relative h-9 gap-2 rounded-full px-2 hover:bg-muted transition-all"
-                >
+                <Button variant="ghost" className="relative h-9 gap-2 rounded-full px-2 hover:bg-muted transition-all">
                   <Avatar className="h-8 w-8 ring-2 ring-background shadow-md">
-                    {/* ✅ Affichage de l'avatar avec fallback */}
-                    <AvatarImage src={user.avatar || undefined} alt={fullName} />
+                    <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} alt={fullName} />
                     <AvatarFallback className="bg-secondary/10 text-secondary text-xs font-medium">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden text-sm font-medium lg:inline-block">
-                    {user.firstName}
-                  </span>
+                  <span className="hidden text-sm font-medium lg:inline-block">{user.firstName}</span>
                   <ChevronDown className="hidden h-4 w-4 text-muted-foreground lg:block" />
                 </Button>
               </DropdownMenuTrigger>
@@ -392,7 +391,7 @@ export function AdminHeader() {
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
                     <Avatar className="h-12 w-12">
-                      <AvatarImage src={user.avatar || undefined} alt={fullName} />
+                      <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} alt={fullName} />
                       <AvatarFallback className="bg-secondary/10 text-secondary text-lg">
                         {initials}
                       </AvatarFallback>
@@ -462,7 +461,6 @@ export function AdminHeader() {
         </div>
       </header>
 
-      {/* Overlay de recherche */}
       <AdminSearchOverlay open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   );

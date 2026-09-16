@@ -2,16 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { cn } from '@/lib/utils';
 import { publicNavigation } from '@/config/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { LiveNotificationsBell } from '@/components/admin/LiveNotificationsBell';
 
 export function PublicHeader() {
   const pathname = usePathname();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-md">
@@ -45,9 +45,12 @@ export function PublicHeader() {
         <div className="flex items-center gap-2">
           <ThemeToggle variant="ghost" size="icon" />
           {isAuthenticated ? (
-            <Button asChild variant="default" size="sm">
-              <Link href="/admin/dashboard">Tableau de bord</Link>
-            </Button>
+            <>
+              <LiveNotificationsBell />
+              <Button asChild variant="default" size="sm">
+                <Link href="/admin/dashboard">Tableau de bord</Link>
+              </Button>
+            </>
           ) : (
             <>
               <Button asChild variant="ghost" size="sm" className="hidden sm:flex">
