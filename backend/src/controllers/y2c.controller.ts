@@ -84,9 +84,6 @@ export class Y2CController extends BaseController {
 
   // ============ BADGE GENERATION ============
 
-  /**
-   * Génère un badge pour un membre spécifique
-   */
   generateBadgeForMember = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -97,9 +94,6 @@ export class Y2CController extends BaseController {
     }
   };
 
-  /**
-   * Génère des badges pour tous les membres qui n'en ont pas
-   */
   generateBadges = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.y2cService.generateBadges();

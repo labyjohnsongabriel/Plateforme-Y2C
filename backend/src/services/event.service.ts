@@ -6,6 +6,7 @@ import { Event } from '@prisma/client';
 import { generateUniqueSlug } from '../utils/slugify';
 import { mailer } from '../config/mailer';
 import { logger } from '../config/logger';
+import { env } from '../config/env';
 
 export class EventService extends BaseService<Event, CreateEventDTO, UpdateEventDTO> {
   private eventRepository: EventRepository;
@@ -15,9 +16,140 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
     this.eventRepository = new EventRepository();
   }
 
+  // ─── Layout HTML pour les emails ────────────────────────────
+  private getEmailLayout(content: string, title: string): string {
+    const siteName = 'Youth Computing';
+    const siteUrl = env.FRONTEND_URL || 'https://youthcomputing.mg';
+    const year = new Date().getFullYear();
+
+    return `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${title}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7fc;
+            padding: 20px;
+            line-height: 1.6;
+            color: #1e293b;
+          }
+          .container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+          }
+          .header {
+            background: linear-gradient(135deg, #0b1a4a, #1a3a8a);
+            padding: 32px 24px;
+            text-align: center;
+          }
+          .header h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin: 0;
+          }
+          .header h1 span { color: #ffd700; }
+          .header p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+            margin: 8px 0 0;
+          }
+          .body { padding: 32px 28px; }
+          .body h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #0b1a4a;
+            margin-bottom: 16px;
+          }
+          .body p { margin-bottom: 12px; }
+          .body .button {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #1a3a8a;
+            color: #ffffff !important;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+          }
+          .body .button:hover { background: #0b1a4a; }
+          .body .info-box {
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-size: 14px;
+          }
+          .body .info-box strong { color: #0b1a4a; }
+          .footer {
+            padding: 20px 28px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            font-size: 13px;
+            color: #94a3b8;
+            background: #fafbfc;
+          }
+          .footer a { color: #1a3a8a; text-decoration: none; }
+          .footer a:hover { text-decoration: underline; }
+          .footer .social {
+            margin-top: 8px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+          }
+          .footer .social a {
+            color: #94a3b8;
+            font-size: 18px;
+            text-decoration: none;
+          }
+          .footer .social a:hover { color: #1a3a8a; }
+          @media (max-width: 480px) {
+            .body { padding: 20px; }
+            .body .button { width: 100%; text-align: center; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✉️ <span>Youth</span> Computing</h1>
+            <p>${title}</p>
+          </div>
+          <div class="body">
+            ${content}
+          </div>
+          <div class="footer">
+            <p>
+              Cet email a été envoyé par <strong>Youth Computing</strong>.<br />
+              <a href="${siteUrl}">${siteUrl}</a>
+            </p>
+            <div class="social">
+              <a href="https://facebook.com/youthcomputing" target="_blank">📘</a>
+              <a href="https://twitter.com/youthcomputing" target="_blank">🐦</a>
+              <a href="https://linkedin.com/company/youthcomputing" target="_blank">💼</a>
+            </div>
+            <p style="margin-top:10px; font-size:11px; color:#b0b8c4;">
+              &copy; ${year} Youth Computing. Tous droits réservés.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
   // ─── CREATE ────────────────────────────────────────────────
   async create(data: CreateEventDTO): Promise<Event> {
-    // ✅ Correction : passer le nom du modèle 'event'
     const slug = await generateUniqueSlug(data.title, 'event');
     return this.eventRepository.create({
       ...data,
@@ -33,7 +165,6 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
 
     let slug = event.slug;
     if (data.title && data.title !== event.title) {
-      // ✅ Correction : passer le nom du modèle 'event'
       slug = await generateUniqueSlug(data.title, 'event');
     }
 
@@ -89,18 +220,44 @@ export class EventService extends BaseService<Event, CreateEventDTO, UpdateEvent
       status: 'PENDING',
     });
 
-    // Envoyer la confirmation
+    // ─── Envoyer la confirmation avec template professionnel ──
     try {
+      const siteUrl = env.FRONTEND_URL || 'https://youthcomputing.mg';
+      const formattedDate = new Date(event.startDate).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+      const formattedTime = event.time || 'à confirmer';
+
+      const content = `
+        <h2>✅ Inscription confirmée</h2>
+        <p>Bonjour ${data.name},</p>
+        <p>Votre inscription à l’événement <strong>« ${event.title} »</strong> a bien été enregistrée.</p>
+        <div class="info-box">
+          <p><strong>📅 Date :</strong> ${formattedDate}</p>
+          <p><strong>🕒 Heure :</strong> ${formattedTime}</p>
+          <p><strong>📍 Lieu :</strong> ${event.location}</p>
+          ${event.isPaid && event.price ? `<p><strong>💰 Prix :</strong> ${event.price.toLocaleString()} MGA</p>` : ''}
+        </div>
+        <p>Nous vous attendons avec impatience !</p>
+        <p style="text-align:center; margin-top:20px;">
+          <a href="${siteUrl}/events/${event.slug}" class="button">Voir l’événement</a>
+        </p>
+        <p style="font-size:13px; color:#64748b;">
+          Si vous avez des questions, n’hésitez pas à nous contacter.
+        </p>
+      `;
+
+      const html = this.getEmailLayout(content, 'Confirmation d’inscription');
+
       await mailer.sendTemplatedEmail(data.email, 'event-registration', {
         name: data.name,
-        content: `
-          <h2>Inscription confirmée</h2>
-          <p>Vous êtes inscrit à l'événement : ${event.title}</p>
-          <p><strong>Date:</strong> ${new Date(event.startDate).toLocaleDateString()}</p>
-          <p><strong>Heure:</strong> ${event.time}</p>
-          <p><strong>Lieu:</strong> ${event.location}</p>
-        `,
+        content,
+        html,
       });
+      logger.info(`📧 Email d’inscription envoyé à ${data.email}`);
     } catch (error) {
       logger.error('Failed to send event registration email:', error);
     }

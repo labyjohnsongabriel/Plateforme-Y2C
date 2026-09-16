@@ -1,4 +1,4 @@
-import { BaseService } from './base.service';
+// src/services/y2c.service.ts
 import { Y2CMemberRepository } from '../repositories/y2cMember.repository';
 import { Y2CEventRepository } from '../repositories/y2cEvent.repository';
 import { PaymentRepository } from '../repositories/payment.repository';
@@ -9,9 +9,10 @@ import {
   UpdateY2CEventDTO,
 } from '../types/dto/y2c.dto';
 import { ApiError } from '../utils/ApiError';
-import { Prisma, Y2CMember, Y2CEvent, Y2CMemberStatus, PaymentStatus } from '@prisma/client';
+import { Prisma, Y2CMember, Y2CEvent } from '@prisma/client';
 import { mailer } from '../config/mailer';
 import { logger } from '../config/logger';
+import { env } from '../config/env';
 import { slugify } from '../utils/slugify';
 import prisma from '../../prisma/client';
 
@@ -26,33 +27,189 @@ export class Y2CService {
     this.paymentRepository = new PaymentRepository();
   }
 
+  // ─── Layout HTML pour tous les emails ────────────────────────
+  private getEmailLayout(content: string, title: string): string {
+    const siteName = 'Youth Computing';
+    const siteUrl = env.FRONTEND_URL || 'https://youthcomputing.mg';
+    const year = new Date().getFullYear();
+
+    return `
+      <!DOCTYPE html>
+      <html lang="fr">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${title}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7fc;
+            padding: 20px;
+            line-height: 1.6;
+            color: #1e293b;
+          }
+          .container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+          }
+          .header {
+            background: linear-gradient(135deg, #0b1a4a, #1a3a8a);
+            padding: 32px 24px;
+            text-align: center;
+          }
+          .header h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin: 0;
+          }
+          .header h1 span { color: #ffd700; }
+          .header p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 14px;
+            margin: 8px 0 0;
+          }
+          .body { padding: 32px 28px; }
+          .body h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #0b1a4a;
+            margin-bottom: 16px;
+          }
+          .body p { margin-bottom: 12px; }
+          .body .button {
+            display: inline-block;
+            padding: 10px 24px;
+            background: #1a3a8a;
+            color: #ffffff !important;
+            border-radius: 40px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+          }
+          .body .button:hover { background: #0b1a4a; }
+          .body .info-box {
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-size: 14px;
+          }
+          .body .info-box strong { color: #0b1a4a; }
+          .footer {
+            padding: 20px 28px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            font-size: 13px;
+            color: #94a3b8;
+            background: #fafbfc;
+          }
+          .footer a { color: #1a3a8a; text-decoration: none; }
+          .footer a:hover { text-decoration: underline; }
+          .footer .social {
+            margin-top: 8px;
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+          }
+          .footer .social a {
+            color: #94a3b8;
+            font-size: 18px;
+            text-decoration: none;
+          }
+          .footer .social a:hover { color: #1a3a8a; }
+          @media (max-width: 480px) {
+            .body { padding: 20px; }
+            .body .button { width: 100%; text-align: center; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🌟 <span>Youth</span> Computing</h1>
+            <p>${title}</p>
+          </div>
+          <div class="body">
+            ${content}
+          </div>
+          <div class="footer">
+            <p>
+              Cet email a été envoyé par <strong>Youth Computing</strong>.<br />
+              <a href="${siteUrl}">${siteUrl}</a>
+            </p>
+            <div class="social">
+              <a href="https://facebook.com/youthcomputing" target="_blank">📘</a>
+              <a href="https://twitter.com/youthcomputing" target="_blank">🐦</a>
+              <a href="https://linkedin.com/company/youthcomputing" target="_blank">💼</a>
+            </div>
+            <p style="margin-top:10px; font-size:11px; color:#b0b8c4;">
+              &copy; ${year} Youth Computing. Tous droits réservés.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  // ─── Méthode utilitaire d’envoi d’email ─────────────────────
+  private async sendEmail(to: string, subject: string, content: string): Promise<void> {
+    const html = this.getEmailLayout(content, subject);
+    await mailer.sendTemplatedEmail(to, 'y2c-notification', {
+      subject,
+      html,
+      content, // pour compatibilité
+    });
+    logger.info(`📧 Email Y2C envoyé à ${to}: ${subject}`);
+  }
+
   // ============ MEMBERS ============
 
   async createMember(data: CreateY2CMemberDTO): Promise<Y2CMember> {
     const existingMember = await this.memberRepository.findByEmail(data.email);
     if (existingMember) {
-      throw ApiError.conflict('Email already registered as Y2C member');
+      throw ApiError.conflict('Email déjà enregistré comme membre Y2C');
     }
     const badgeNumber = await this.generateBadgeNumber();
     const member = await this.memberRepository.create({
-      ...data,
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      institution: data.institution || null,
       badgeNumber,
       status: 'PENDING',
-      membershipFeePaid: data.membershipFeePaid || 25000,
     });
+
+    // ─── Email de bienvenue (designé) ──────────────────────
     try {
-      await mailer.sendTemplatedEmail(member.email, 'y2c-welcome', {
-        name: member.name,
-        content: `
-          <h2>Bienvenue dans la communauté Y2C !</h2>
-          <p>Nous sommes ravis de vous compter parmi nous.</p>
-          <p><strong>Numéro de badge :</strong> ${member.badgeNumber}</p>
-          <p>Vous recevrez bientôt votre badge numérique.</p>
-        `,
-      });
+      const content = `
+        <h2>👋 Bienvenue dans la communauté Y2C !</h2>
+        <p>Bonjour <strong>${member.name}</strong>,</p>
+        <p>Nous sommes ravis de vous compter parmi les membres de <strong>Youth Computing Community (Y2C)</strong>.</p>
+        <div class="info-box">
+          <p><strong>🔖 Numéro de badge :</strong> ${member.badgeNumber}</p>
+          <p><strong>📧 Email :</strong> ${member.email}</p>
+        </div>
+        <p>Vous recevrez sous peu votre badge numérique. En attendant, explorez les événements et opportunités réservés aux membres Y2C.</p>
+        <p style="text-align:center; margin-top:20px;">
+          <a href="${env.FRONTEND_URL}/y2c/events" class="button">Voir les événements</a>
+        </p>
+        <p style="font-size:13px; color:#64748b;">
+          L’équipe Youth Computing
+        </p>
+      `;
+      await this.sendEmail(member.email, 'Bienvenue dans la communauté Y2C', content);
     } catch (error) {
-      logger.error('Failed to send Y2C welcome email:', error);
+      logger.error('Échec envoi email de bienvenue Y2C:', error);
     }
+
     return member;
   }
 
@@ -60,7 +217,7 @@ export class Y2CService {
     const member = await this.memberRepository.findByIdOrThrow(id);
     if (data.email && data.email !== member.email) {
       const existing = await this.memberRepository.findByEmail(data.email);
-      if (existing) throw ApiError.conflict('Email already registered as Y2C member');
+      if (existing) throw ApiError.conflict('Email déjà enregistré comme membre Y2C');
     }
     return this.memberRepository.update(id, data);
   }
@@ -68,24 +225,41 @@ export class Y2CService {
   async approveMember(id: string): Promise<Y2CMember> {
     const member = await this.memberRepository.findByIdOrThrow(id);
     if (member.status === 'ACTIVE') {
-      throw ApiError.badRequest('Member already active');
+      throw ApiError.badRequest('Membre déjà actif');
     }
     const updated = await this.memberRepository.update(id, {
       status: 'ACTIVE',
       joinedAt: new Date(),
     });
+
+    // ─── Email d’approbation (designé) ─────────────────────
     try {
-      await mailer.sendTemplatedEmail(member.email, 'y2c-approved', {
-        name: member.name,
-        content: `
-          <h2>Votre adhésion Y2C a été approuvée !</h2>
-          <p>Félicitations ! Vous êtes maintenant membre actif de la communauté Y2C.</p>
-          <p>Vous pouvez maintenant participer à tous nos événements.</p>
-        `,
-      });
+      const content = `
+        <h2>✅ Votre adhésion Y2C est approuvée !</h2>
+        <p>Bonjour <strong>${member.name}</strong>,</p>
+        <p>Félicitations ! Votre demande d’adhésion à la communauté <strong>Youth Computing Community (Y2C)</strong> a été approuvée.</p>
+        <div class="info-box">
+          <p><strong>🔖 Numéro de badge :</strong> ${member.badgeNumber}</p>
+          <p><strong>📅 Date d’adhésion :</strong> ${new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+        </div>
+        <p>Vous avez désormais accès à tous les avantages réservés aux membres Y2C :</p>
+        <ul>
+          <li>🎯 Événements exclusifs</li>
+          <li>🤝 Réseautage avec des experts</li>
+          <li>📚 Ressources et formations</li>
+        </ul>
+        <p style="text-align:center; margin-top:20px;">
+          <a href="${env.FRONTEND_URL}/y2c/dashboard" class="button">Accéder à mon espace Y2C</a>
+        </p>
+        <p style="font-size:13px; color:#64748b;">
+          Bienvenue officiellement dans la famille Y2C !
+        </p>
+      `;
+      await this.sendEmail(member.email, 'Adhésion Y2C approuvée', content);
     } catch (error) {
-      logger.error('Failed to send Y2C approval email:', error);
+      logger.error('Échec envoi email d\'approbation:', error);
     }
+
     return updated;
   }
 
@@ -113,11 +287,9 @@ export class Y2CService {
   async generateBadges(): Promise<{ generated: number; message: string }> {
     const allMembers = await this.memberRepository.findMany({});
     const membersWithoutBadge = allMembers.filter((member) => !member.badgeNumber);
-
     if (membersWithoutBadge.length === 0) {
       return { generated: 0, message: 'Tous les membres ont déjà un badge.' };
     }
-
     let generatedCount = 0;
     for (const member of membersWithoutBadge) {
       const newBadge = await this.generateBadgeNumber();
@@ -126,27 +298,30 @@ export class Y2CService {
         status: 'ACTIVE',
       });
       generatedCount++;
+
+      // ─── Email du badge (designé) ────────────────────────
       try {
-        await mailer.sendTemplatedEmail(member.email, 'y2c-badge-generated', {
-          name: member.name,
-          badgeNumber: newBadge,
-          content: `
-            <h2>Votre badge Y2C est prêt !</h2>
-            <p>Bonjour ${member.name},</p>
-            <p>Votre badge numérique est maintenant disponible.</p>
-            <p><strong>Numéro de badge :</strong> ${newBadge}</p>
-            <p>Vous pouvez le télécharger depuis votre espace membre.</p>
-          `,
-        });
+        const content = `
+          <h2>🔖 Votre badge Y2C est prêt !</h2>
+          <p>Bonjour <strong>${member.name}</strong>,</p>
+          <p>Votre badge numérique de membre <strong>Youth Computing Community</strong> a été généré.</p>
+          <div class="info-box">
+            <p><strong>🔖 Numéro de badge :</strong> ${newBadge}</p>
+          </div>
+          <p>Ce badge vous identifie en tant que membre actif de la communauté. Vous pouvez le présenter lors de nos événements.</p>
+          <p style="text-align:center; margin-top:20px;">
+            <a href="${env.FRONTEND_URL}/y2c/dashboard" class="button">Voir mon profil Y2C</a>
+          </p>
+          <p style="font-size:13px; color:#64748b;">
+            Bienvenue parmi nous !
+          </p>
+        `;
+        await this.sendEmail(member.email, 'Votre badge Y2C est prêt', content);
       } catch (error) {
-        logger.error(`Failed to send badge email to ${member.email}:`, error);
+        logger.error(`Échec envoi email badge à ${member.email}:`, error);
       }
     }
-
-    return {
-      generated: generatedCount,
-      message: `${generatedCount} badge(s) généré(s) avec succès.`,
-    };
+    return { generated: generatedCount, message: `${generatedCount} badge(s) généré(s).` };
   }
 
   async generateBadgeForMember(id: string): Promise<Y2CMember> {
@@ -159,21 +334,29 @@ export class Y2CService {
       badgeNumber: newBadge,
       status: 'ACTIVE',
     });
+
+    // ─── Email du badge (designé) ────────────────────────
     try {
-      await mailer.sendTemplatedEmail(updated.email, 'y2c-badge-generated', {
-        name: updated.name,
-        badgeNumber: newBadge,
-        content: `
-          <h2>Votre badge Y2C est prêt !</h2>
-          <p>Bonjour ${updated.name},</p>
-          <p>Votre badge numérique est maintenant disponible.</p>
-          <p><strong>Numéro de badge :</strong> ${newBadge}</p>
-          <p>Vous pouvez le télécharger depuis votre espace membre.</p>
-        `,
-      });
+      const content = `
+        <h2>🔖 Votre badge Y2C est prêt !</h2>
+        <p>Bonjour <strong>${updated.name}</strong>,</p>
+        <p>Votre badge numérique de membre <strong>Youth Computing Community</strong> a été généré.</p>
+        <div class="info-box">
+          <p><strong>🔖 Numéro de badge :</strong> ${newBadge}</p>
+        </div>
+        <p>Ce badge vous identifie en tant que membre actif de la communauté. Vous pouvez le présenter lors de nos événements.</p>
+        <p style="text-align:center; margin-top:20px;">
+          <a href="${env.FRONTEND_URL}/y2c/dashboard" class="button">Voir mon profil Y2C</a>
+        </p>
+        <p style="font-size:13px; color:#64748b;">
+          Bienvenue parmi nous !
+        </p>
+      `;
+      await this.sendEmail(updated.email, 'Votre badge Y2C est prêt', content);
     } catch (error) {
-      logger.error(`Failed to send badge email to ${updated.email}:`, error);
+      logger.error(`Échec envoi email badge à ${updated.email}:`, error);
     }
+
     return updated;
   }
 
@@ -187,21 +370,16 @@ export class Y2CService {
   // ============ EVENTS ============
 
   async createEvent(data: CreateY2CEventDTO): Promise<Y2CEvent> {
-    // Générer le slug manuellement avec prisma
     let baseSlug = slugify(data.title);
     if (!baseSlug) baseSlug = 'event';
-
     let slug = baseSlug;
     let counter = 1;
     while (true) {
-      const existing = await prisma.y2CEvent.findFirst({
-        where: { slug },
-      });
+      const existing = await prisma.y2CEvent.findFirst({ where: { slug } });
       if (!existing) break;
       slug = `${baseSlug}-${counter}`;
       counter++;
     }
-
     const createData = {
       ...data,
       slug,
@@ -214,7 +392,6 @@ export class Y2CService {
   async updateEvent(id: string, data: UpdateY2CEventDTO): Promise<Y2CEvent> {
     const event = await this.eventRepository.findByIdOrThrow(id);
     let slug = event.slug;
-
     if (data.title && data.title !== event.title) {
       let baseSlug = slugify(data.title);
       if (!baseSlug) baseSlug = 'event';
@@ -222,18 +399,13 @@ export class Y2CService {
       let counter = 1;
       while (true) {
         const existing = await prisma.y2CEvent.findFirst({
-          where: {
-            slug,
-            // ✅ Correction : on utilise NOT avec id: event.id
-            NOT: { id: event.id },
-          },
+          where: { slug, NOT: { id: event.id } },
         });
         if (!existing) break;
         slug = `${baseSlug}-${counter}`;
         counter++;
       }
     }
-
     return this.eventRepository.update(id, { ...data, slug });
   }
 
@@ -254,32 +426,71 @@ export class Y2CService {
     return this.eventRepository.findPaginated(params);
   }
 
-  async registerForEvent(eventId: string, data: any): Promise<any> {
+  // ─── Inscription à un événement Y2C ──────────────────────────
+
+  async registerForEvent(eventId: string, data: { fullName: string; email: string; phone: string }): Promise<any> {
     const event = await this.eventRepository.findByIdOrThrow(eventId);
+    if (!event.isPublished) {
+      throw ApiError.badRequest('Cet événement n\'est pas disponible');
+    }
+
+    const existing = await this.eventRepository.getRegistrations(eventId);
+    const alreadyRegistered = existing.some((r: any) => r.email === data.email);
+    if (alreadyRegistered) {
+      throw ApiError.conflict('Vous êtes déjà inscrit à cet événement');
+    }
+
     if (event.maxParticipants) {
-      const registrations = await this.eventRepository.getRegistrations(eventId);
-      if (registrations.length >= event.maxParticipants) {
-        throw ApiError.badRequest('Event is full');
+      if (existing.length >= event.maxParticipants) {
+        throw ApiError.badRequest('Désolé, l\'événement est complet');
       }
     }
+
     const registration = await this.eventRepository.createRegistration({
-      eventId,
-      ...data,
+      Y2CEvent: { connect: { id: eventId } },
+      name: data.fullName,
+      email: data.email,
+      phone: data.phone,
       status: 'PENDING',
     });
+
+    // ─── Email de confirmation d’inscription (designé) ──────
     try {
-      await mailer.sendTemplatedEmail(data.email, 'y2c-event-registration', {
-        name: data.name,
-        content: `
-          <h2>Inscription confirmée</h2>
-          <p>Vous êtes inscrit à l'événement Y2C : ${event.title}</p>
-          <p><strong>Date :</strong> ${new Date(event.startDate).toLocaleDateString()}</p>
-          <p><strong>Lieu :</strong> ${event.location}</p>
-        `,
+      const formattedDate = new Date(event.startDate).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
+
+      // ✅ Correction : extraction de l'heure depuis startDate (car event.time n'existe pas)
+      const formattedTime = event.startDate
+        ? new Date(event.startDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : 'à confirmer';
+
+      const content = `
+        <h2>✅ Inscription confirmée</h2>
+        <p>Bonjour <strong>${data.fullName}</strong>,</p>
+        <p>Votre inscription à l’événement Y2C <strong>« ${event.title} »</strong> a bien été enregistrée.</p>
+        <div class="info-box">
+          <p><strong>📅 Date :</strong> ${formattedDate}</p>
+          <p><strong>🕒 Heure :</strong> ${formattedTime}</p>
+          <p><strong>📍 Lieu :</strong> ${event.location}</p>
+          ${event.isPaid && event.price ? `<p><strong>💰 Prix :</strong> ${event.price.toLocaleString()} MGA</p>` : ''}
+        </div>
+        <p>Nous vous attendons avec impatience pour partager ce moment !</p>
+        <p style="text-align:center; margin-top:20px;">
+          <a href="${env.FRONTEND_URL}/y2c/events/${event.slug}" class="button">Voir l’événement</a>
+        </p>
+        <p style="font-size:13px; color:#64748b;">
+          L’équipe Y2C – Youth Computing
+        </p>
+      `;
+      await this.sendEmail(data.email, `Confirmation d’inscription - ${event.title}`, content);
     } catch (error) {
-      logger.error('Failed to send event registration email:', error);
+      logger.error('Erreur envoi email confirmation:', error);
     }
+
     return registration;
   }
 

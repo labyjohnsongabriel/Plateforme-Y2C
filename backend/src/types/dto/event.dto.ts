@@ -13,7 +13,7 @@ export interface EventDTO {
   location: string;
   maxAttendees?: number;
   isPaid: boolean;
-  price?: number;
+  price?: number; 
   imageUrl?: string;
   isPublished: boolean;
   createdAt: Date;

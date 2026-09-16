@@ -37,6 +37,28 @@ export const createY2CMemberValidator = [
     .toFloat(),
 ];
 
+// ✅ Inscription à un événement Y2C (validateur utilisé par la route publique)
+export const registerForEventValidator = [
+  body('fullName')   // ⬅️ aligné avec le frontend
+    .isString()
+    .notEmpty()
+    .withMessage('Le nom complet est requis')
+    .isLength({ min: 2 })
+    .withMessage('Le nom doit contenir au moins 2 caractères'),
+  body('email')
+    .isEmail()
+    .withMessage('Email invalide')
+    .normalizeEmail(),
+  body('phone')
+    .isString()
+    .notEmpty()
+    .withMessage('Le numéro de téléphone est requis')
+    .isLength({ min: 8 })
+    .withMessage('Le téléphone doit contenir au moins 8 caractères')
+    .matches(/^[+\d\s\-()]+$/)
+    .withMessage('Format de téléphone invalide'),
+];
+
 export const updateY2CMemberValidator = [
   body('name')
     .optional()

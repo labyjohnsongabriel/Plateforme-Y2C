@@ -1,6 +1,8 @@
+// src/types/dto/y2c.dto.ts
 import { Y2CMemberStatus, EventType } from '../roles.enum';
 import { PaginationParams } from '../index';
 
+// ─── Membre Y2C ──────────────────────────────────────────────
 export interface Y2CMemberDTO {
   id: string;
   name: string;
@@ -8,7 +10,6 @@ export interface Y2CMemberDTO {
   phone: string;
   studentId?: string;
   institution?: string;
-  membershipFeePaid: number;
   badgeNumber: string;
   status: Y2CMemberStatus;
   joinedAt: Date;
@@ -17,6 +18,27 @@ export interface Y2CMemberDTO {
   updatedAt: Date;
 }
 
+export interface CreateY2CMemberDTO {
+  name: string;
+  email: string;
+  phone: string;
+  studentId?: string;
+  institution?: string;
+  // ✅ suppression de membershipFeePaid et motivation
+}
+
+export interface UpdateY2CMemberDTO {
+  name?: string;
+  email?: string;
+  phone?: string;
+  studentId?: string;
+  institution?: string;
+  status?: Y2CMemberStatus;
+  badgeNumber?: string;
+  expiresAt?: Date;
+}
+
+// ─── Événements ──────────────────────────────────────────────
 export interface Y2CEventDTO {
   id: string;
   title: string;
@@ -33,40 +55,6 @@ export interface Y2CEventDTO {
   createdAt: Date;
   updatedAt: Date;
   registrations?: Y2CEventRegistrationDTO[];
-}
-
-export interface Y2CEventRegistrationDTO {
-  id: string;
-  eventId: string;
-  name: string;
-  email: string;
-  phone: string;
-  studentId?: string;
-  institution?: string;
-  status: string;
-  attended: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface CreateY2CMemberDTO {
-  name: string;
-  email: string;
-  phone: string;
-  studentId?: string;
-  institution?: string;
-  membershipFeePaid: number;
-}
-
-export interface UpdateY2CMemberDTO {
-  name?: string;
-  email?: string;
-  phone?: string;
-  studentId?: string;
-  institution?: string;
-  membershipFeePaid?: number;
-  status?: Y2CMemberStatus;
-  expiresAt?: Date;
 }
 
 export interface CreateY2CEventDTO {
@@ -97,6 +85,21 @@ export interface UpdateY2CEventDTO {
   isPublished?: boolean;
 }
 
+// ─── Inscriptions ────────────────────────────────────────────
+export interface Y2CEventRegistrationDTO {
+  id: string;
+  eventId: string;
+  name: string;
+  email: string;
+  phone: string;
+  studentId?: string;
+  institution?: string;
+  status: string;
+  attended: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface CreateY2CEventRegistrationDTO {
   eventId: string;
   name: string;
@@ -106,6 +109,7 @@ export interface CreateY2CEventRegistrationDTO {
   institution?: string;
 }
 
+// ─── Filtres ─────────────────────────────────────────────────
 export interface Y2CMemberFilterParams extends PaginationParams {
   search?: string;
   status?: Y2CMemberStatus;
@@ -120,6 +124,7 @@ export interface Y2CEventFilterParams extends PaginationParams {
   dateTo?: Date;
 }
 
+// ─── Lists ───────────────────────────────────────────────────
 export interface Y2CMemberListDTO {
   members: Y2CMemberDTO[];
   pagination: {
@@ -140,6 +145,7 @@ export interface Y2CEventListDTO {
   };
 }
 
+// ─── Statistiques ────────────────────────────────────────────
 export interface Y2CStatsDTO {
   totalMembers: number;
   activeMembers: number;
@@ -156,6 +162,7 @@ export interface Y2CStatsDTO {
   };
 }
 
+// ─── Export ──────────────────────────────────────────────────
 export interface Y2CMemberExportDTO {
   id: string;
   name: string;
