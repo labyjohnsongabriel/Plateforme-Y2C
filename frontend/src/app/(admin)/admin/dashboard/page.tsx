@@ -1,7 +1,7 @@
 // src/app/(admin)/admin/dashboard/page.tsx
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { PageTransition } from '@/components/shared/PageTransition';
 import { StatsOverview } from './components/StatsOverview';
 import { ChartsSection } from './components/ChartsSection';
@@ -18,16 +18,81 @@ import {
   Zap,
   BarChart3,
   ListChecks,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
+// ============================================================
+// COMPOSANT — Section Header réutilisable
+// ============================================================
+interface SectionHeaderProps {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  badgeColor?: 'primary' | 'secondary' | 'amber' | 'emerald';
+  iconBg?: string;
+  action?: React.ReactNode;
+}
+
+const BADGE_COLORS = {
+  primary: 'text-primary',
+  secondary: 'text-secondary',
+  amber: 'text-amber-600 dark:text-amber-400',
+  emerald: 'text-emerald-600 dark:text-emerald-400',
+} as const;
+
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  badge,
+  badgeColor = 'primary',
+  iconBg = 'bg-primary/10 text-primary',
+  action,
+}: SectionHeaderProps) {
+  return (
+    <header className="flex flex-wrap items-center gap-3">
+      <div
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg',
+          iconBg
+        )}
+        aria-hidden="true"
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        )}
+      </div>
+      {badge && (
+        <span
+          className={cn(
+            'rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+            BADGE_COLORS[badgeColor]
+          )}
+        >
+          {badge}
+        </span>
+      )}
+      {action && <div className="ml-auto">{action}</div>}
+    </header>
+  );
+}
+
+// ============================================================
+// PAGE PRINCIPALE
+// ============================================================
 export default function DashboardPage() {
   const { user } = useAuth();
   const { stats, loading, error, refetch } = useDashboardStats();
 
-  // ─── Fetcher REST pour les notifications (fallback si socket KO) ───
+  // ─── Fetcher REST pour les notifications (fallback socket) ───
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications', {
@@ -40,11 +105,23 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // ─── Label horaire (Bonjour/Bonsoir) ───
+  const greeting = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Bonjour';
+    if (hour < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  }, []);
+
+  const userName = user?.firstName || 'Utilisateur';
+
   return (
     <ProtectedRoute roles={['ADMIN', 'SUPER_ADMIN']} showError>
       <PageTransition>
-        <div className="space-y-6">
-          {/* ═══════════════ EN-TÊTE ═══════════════ */}
+        <div className="space-y-8">
+          {/* ═══════════════════════════════════════════════════════
+              EN-TÊTE
+             ═══════════════════════════════════════════════════════ */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -52,19 +129,24 @@ export default function DashboardPage() {
             className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-center gap-3">
-              <div className="hidden h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-secondary/15 text-secondary shadow-sm sm:flex">
+              <div className="hidden h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-secondary/15 text-secondary shadow-sm sm:flex">
                 <LayoutDashboard className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="font-ubuntu text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                  Tableau de bord
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="font-ubuntu text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                    Tableau de bord
+                  </h1>
+                  <span className="hidden rounded-full border border-emerald-200/60 bg-emerald-50/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 sm:inline dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    Live
+                  </span>
+                </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Bienvenue,{' '}
+                  {greeting},{' '}
                   <span className="font-medium text-foreground">
-                    {user?.firstName || 'Utilisateur'}
+                    {userName}
                   </span>{' '}
-                  👋 Voici un aperçu de votre activité.
+                  👋 Voici votre activité en temps réel.
                 </p>
               </div>
             </div>
@@ -76,17 +158,22 @@ export default function DashboardPage() {
               disabled={loading}
               className="gap-2 border-primary/20 bg-primary/5 transition-all duration-300 hover:border-primary/40 hover:bg-primary/10"
             >
-              <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+              <RefreshCw
+                className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+              />
               <span className="hidden sm:inline">Actualiser</span>
               <span className="sm:hidden">Actu.</span>
             </Button>
           </motion.div>
 
-          {/* ═══════════════ ERREUR ═══════════════ */}
+          {/* ═══════════════════════════════════════════════════════
+              ERREUR
+             ═══════════════════════════════════════════════════════ */}
           {error && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
+              role="alert"
               className="relative overflow-hidden rounded-xl border border-red-200/50 bg-red-50/80 p-4 text-sm text-red-700 backdrop-blur-sm dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-300"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent" />
@@ -95,75 +182,106 @@ export default function DashboardPage() {
                 <p className="font-medium">{error}</p>
               </div>
             </motion.div>
-          )} {/* ✅ Parenthèse fermante corrigée */}
-
-          {/* ═══════════════ 1. QUICK STATS (temps réel) ═══════════════ */}
-          {stats?.quickStats && Object.keys(stats.quickStats).length > 0 && (
-            <section aria-label="Statistiques rapides" className="space-y-3">
-              <header className="flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <Zap className="h-3.5 w-3.5" />
-                </div>
-                <h2 className="text-sm font-semibold text-foreground">
-                  En direct
-                </h2>
-                <span className="ml-auto text-xs text-muted-foreground">
-                  Temps réel
-                </span>
-              </header>
-              <QuickStats data={stats.quickStats} />
-            </section>
           )}
 
-          {/* ═══════════════ 2. STATS GÉNÉRALES (vue d'ensemble) ═══════════════ */}
-          <section aria-label="Statistiques générales" className="space-y-3">
-            <header className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <BarChart3 className="h-3.5 w-3.5" />
-              </div>
-              <h2 className="text-sm font-semibold text-foreground">
-                Vue d'ensemble
-              </h2>
-              <span className="ml-auto text-xs text-muted-foreground">
-                Données cumulées
-              </span>
-            </header>
-            <StatsOverview stats={stats?.stats} loading={loading} />
-          </section>
+          {/* ═══════════════════════════════════════════════════════
+              1. EN DIRECT (QuickStats)
+             ═══════════════════════════════════════════════════════ */}
+          {stats?.quickStats &&
+            Object.keys(stats.quickStats).length > 0 && (
+              <motion.section
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05 }}
+                aria-labelledby="section-live"
+                className="space-y-4"
+              >
+                <SectionHeader
+                  icon={<Zap className="h-3.5 w-3.5" />}
+                  title="En direct"
+                  subtitle="Indicateurs temps réel"
+                  badge="Live"
+                  badgeColor="amber"
+                  iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                />
+                <QuickStats data={stats.quickStats} />
+              </motion.section>
+            )}
 
-          {/* ═══════════════ 3. ACTIONS RAPIDES (optionnel) ═══════════════ */}
+          {/* ═══════════════════════════════════════════════════════
+              2. VUE D'ENSEMBLE (StatsOverview groupée)
+             ═══════════════════════════════════════════════════════ */}
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            aria-labelledby="section-overview"
+            className="space-y-4"
+          >
+            <SectionHeader
+              icon={<BarChart3 className="h-3.5 w-3.5" />}
+              title="Vue d'ensemble"
+              subtitle="Données cumulées et tendances"
+              badge="Cumulé"
+              badgeColor="primary"
+            />
+            <StatsOverview stats={stats?.stats} loading={loading} />
+          </motion.section>
+
+          {/* ═══════════════════════════════════════════════════════
+              3. ACTIONS RAPIDES (décommenter si besoin)
+             ═══════════════════════════════════════════════════════ */}
           {/*
           <section aria-label="Actions rapides">
             <QuickActions />
           </section>
           */}
 
-          {/* ═══════════════ 4. GRAPHIQUES + ACTIVITÉS ═══════════════ */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Graphiques – 2/3 de la largeur */}
-            <div className="lg:col-span-2">
+          {/* ═══════════════════════════════════════════════════════
+              4. GRAPHIQUES + ACTIVITÉ
+             ═══════════════════════════════════════════════════════ */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 }}
+            className="grid gap-6 lg:grid-cols-3"
+          >
+            {/* ─── Colonne principale : Graphiques ─── */}
+            <div className="space-y-4 lg:col-span-2">
+              <SectionHeader
+                icon={<BarChart3 className="h-3.5 w-3.5" />}
+                title="Analyses & Graphiques"
+                subtitle="Évolution des indicateurs clés"
+                badge="30 derniers jours"
+                badgeColor="secondary"
+                iconBg="bg-secondary/10 text-secondary"
+              />
+
               <ChartsSection
                 stats={{
                   chartData: stats?.chartData,
                   roleData: stats?.roleData,
-                  // ⚠️ summary RETIRÉ pour éviter les doublons de cartes
-                  //    (StatsOverview gère déjà les 8 cartes)
+                  // ⚠️ summary volontairement omis pour éviter les doublons
+                  //    (StatsOverview gère déjà toutes les cartes)
                 }}
                 loading={loading}
               />
             </div>
 
-            {/* Colonne droite – 1/3 de la largeur */}
+            {/* ─── Colonne latérale : Activité ─── */}
             <div className="space-y-6 lg:col-span-1">
-              <section aria-label="Notifications" className="space-y-3">
-                <header className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary/10 text-secondary">
-                    <ListChecks className="h-3.5 w-3.5" />
-                  </div>
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Activité
-                  </h2>
-                </header>
+              <section
+                aria-labelledby="section-activity"
+                className="space-y-4"
+              >
+                <SectionHeader
+                  icon={<ListChecks className="h-3.5 w-3.5" />}
+                  title="Activité"
+                  subtitle="Notifications et évènements récents"
+                  badge="Live"
+                  badgeColor="emerald"
+                  iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                />
 
                 {/* ⚡ Notifications temps réel (socket + fallback REST) */}
                 <NotificationsPanel fetcher={fetchNotifications} />
@@ -174,9 +292,21 @@ export default function DashboardPage() {
                   loading={loading}
                   limit={5}
                 />
+
+                {/* 🕐 Timestamp du dernier refresh */}
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  <span>
+                    Dernière mise à jour :{' '}
+                    {new Date().toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
               </section>
             </div>
-          </div>
+          </motion.div>
         </div>
       </PageTransition>
     </ProtectedRoute>
