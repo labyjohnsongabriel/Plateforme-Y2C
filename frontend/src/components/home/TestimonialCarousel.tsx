@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, Star, Pause, Play, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { buildImageUrl } from '@/lib/imageUtils';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
@@ -222,7 +223,7 @@ export function TestimonialCarousel({
                     </blockquote>
                     <div className="mt-6 flex items-center gap-3">
                       <Avatar className="h-12 w-12 ring-2 ring-secondary/20">
-                        <AvatarImage src={currentTestimonial.avatar || undefined} alt={currentTestimonial.name} />
+                        <AvatarImage src={currentTestimonial.avatar ? buildImageUrl(currentTestimonial.avatar, false) : undefined} alt={currentTestimonial.name} />
                         <AvatarFallback className="bg-secondary/10 text-secondary font-semibold">
                           {currentTestimonial.name.charAt(0)}
                         </AvatarFallback>

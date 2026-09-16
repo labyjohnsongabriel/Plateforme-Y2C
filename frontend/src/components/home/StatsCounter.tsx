@@ -1,46 +1,47 @@
+// src/components/home/StatsCounter.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react'; // ✅ ajout de useState et useEffect
-import { motion, useInView } from 'framer-motion';
+import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Users, GraduationCap, Building2, Globe } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useHomeStats } from '@/hooks/useHomeData';
+// ✅ Import relatif (correct)
+import { useHomeStats } from '../../hooks/useHomeData';
+import { AnimatedCounter } from './AnimatedCounter';
 
-const AnimatedCounter = ({ target, suffix }: { target: number; suffix: string }) => {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true, amount: 0.3 });
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (isInView) {
-      const duration = 2500;
-      const steps = 80;
-      const increment = target / steps;
-      let current = 0;
-      const timer = setInterval(() => {
-        current += increment;
-        if (current >= target) {
-          setCount(target);
-          clearInterval(timer);
-        } else {
-          setCount(Math.floor(current));
-        }
-      }, duration / steps);
-      return () => clearInterval(timer);
-    }
-  }, [isInView, target]);
-
-  return (
-    <span ref={ref}>
-      {count}
-      {suffix}
-    </span>
-  );
-};
+const STAT_ITEMS_CONFIG = [
+  { key: 'y2cMembers', label: 'Membres actifs', icon: Users, suffix: '' },
+  { key: 'formations', label: 'Formations réalisées', icon: GraduationCap, suffix: '+' },
+  { key: 'registrations', label: 'Bénéficiaires', icon: Globe, suffix: '+' },
+  { key: 'projects', label: 'Projets communautaires', icon: Building2, suffix: '' },
+] as const;
 
 export function StatsCounter() {
-  const { data: stats, isLoading, error } = useHomeStats();
+  const { data, isLoading, error } = useHomeStats();
 
+  // ✅ Transformation sécurisée des données (fallback à 0 si undefined)
+  const safeStats = useMemo(() => {
+    if (!data) {
+      return { y2cMembers: 0, formations: 0, registrations: 0, projects: 0 };
+    }
+    return {
+      y2cMembers: data.y2cMembers ?? 0,
+      formations: data.formations ?? 0,
+      registrations: data.registrations ?? 0,
+      projects: data.projects ?? 0,
+    };
+  }, [data]);
+
+  // ✅ Construction des items avec les valeurs extraites
+  const statItems = useMemo(() =>
+    STAT_ITEMS_CONFIG.map((config) => ({
+      ...config,
+      value: safeStats[config.key as keyof typeof safeStats] || 0,
+    })),
+    [safeStats]
+  );
+
+  // ─── État de chargement ──────────────────────────────────
   if (isLoading) {
     return (
       <section className="relative overflow-hidden bg-primary/5 py-16 dark:bg-primary/10">
@@ -58,26 +59,13 @@ export function StatsCounter() {
       </section>
     );
   }
-
-  if (error || !stats) {
-    return (
-      <section className="relative overflow-hidden bg-primary/5 py-16 dark:bg-primary/10">
-        <div className="container mx-auto px-4 text-center">
-          <p className="text-destructive">Impossible de charger les statistiques.</p>
-        </div>
-      </section>
-    );
-  }
-
-  const statItems = [
-    { value: stats.totalY2CMembers || 0, label: 'Membres actifs', icon: Users, suffix: '' },
-    { value: stats.totalFormations || 0, label: 'Formations réalisées', icon: GraduationCap, suffix: '+' },
-    { value: stats.totalRegistrations || 0, label: 'Bénéficiaires', icon: Globe, suffix: '+' },
-    { value: stats.totalProjects || 0, label: 'Projets communautaires', icon: Building2, suffix: '' },
-  ];
-
   return (
     <section className="relative overflow-hidden bg-primary/5 py-16 dark:bg-primary/10">
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute -top-40 -right-40 h-80 w-80 rounded-full bg-secondary/10 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           {statItems.map((stat, index) => (
@@ -87,12 +75,12 @@ export function StatsCounter() {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.12, duration: 0.6 }}
               viewport={{ once: true }}
-              className="text-center"
+              className="text-center group"
             >
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary transition-transform group-hover:scale-110">
                 <stat.icon className="h-6 w-6" />
               </div>
-              <div className="text-3xl font-bold text-primary dark:text-white md:text-4xl lg:text-5xl">
+              <div className="text-3xl font-bold text-primary dark:text-white md:text-4xl lg:text-5xl font-ubuntu tabular-nums">
                 <AnimatedCounter target={stat.value} suffix={stat.suffix} />
               </div>
               <p className="mt-2 text-sm text-muted-foreground md:text-base">{stat.label}</p>

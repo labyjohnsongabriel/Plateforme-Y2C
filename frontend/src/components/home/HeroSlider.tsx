@@ -6,17 +6,16 @@ import { ChevronLeft, ChevronRight, ArrowRight, Pause, Play } from 'lucide-react
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-// 📸 Images de qualité pour chaque slide (Unsplash - haute résolution)
+// 📸 Toutes les images sont des URLs Unsplash (pas de dépendance locale)
 const slides = [
   {
     id: 0,
     title: 'La culture numérique pour tous',
     subtitle: 'Youth Computing',
-    description: 'Promouvoir l\'inclusion numérique à Madagascar',
+    description: "Promouvoir l'inclusion numérique à Madagascar",
     cta: 'Découvrir',
     link: '/a-propos',
     image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1600&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&q=80',
   },
   {
     id: 1,
@@ -26,7 +25,6 @@ const slides = [
     cta: 'Adhérer',
     link: '/communaute-y2c',
     image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1600&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&q=80',
   },
   {
     id: 2,
@@ -36,7 +34,6 @@ const slides = [
     cta: 'Voir les formations',
     link: '/formations',
     image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1600&q=80',
-    mobileImage: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&q=80',
   },
 ];
 
@@ -45,13 +42,14 @@ export function HeroSlider() {
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [imagesLoaded, setImagesLoaded] = useState<boolean[]>([]);
 
-  // Préchargement des images
+  // Préchargement des images avec l'API standard du navigateur
   useEffect(() => {
     const loadImages = async () => {
       const loaded = await Promise.all(
         slides.map((slide) => {
           return new Promise<boolean>((resolve) => {
-            const img = new Image();
+            // Utiliser `window.Image` pour éviter tout conflit avec Next.js
+            const img = new window.Image();
             img.src = slide.image;
             img.onload = () => resolve(true);
             img.onerror = () => resolve(false);
@@ -75,16 +73,13 @@ export function HeroSlider() {
     setIsAutoPlaying(!isAutoPlaying);
   };
 
-  // Auto-play
   useEffect(() => {
     if (!isAutoPlaying) return;
     const timer = setInterval(next, 6000);
     return () => clearInterval(timer);
   }, [isAutoPlaying, next]);
 
-  // Pause auto-play au survol
   const [isHovering, setIsHovering] = useState(false);
-
   const currentSlide = slides[current];
   const isImageLoaded = imagesLoaded[current] !== false;
 
@@ -103,7 +98,7 @@ export function HeroSlider() {
           transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
           className="absolute inset-0"
         >
-          {/* Image de fond avec overlay */}
+          {/* Fond image */}
           <div className="absolute inset-0 bg-primary/40">
             <img
               src={currentSlide.image}
@@ -116,7 +111,7 @@ export function HeroSlider() {
             />
           </div>
 
-          {/* Overlay gradient élégant */}
+          {/* Overlays */}
           <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/60 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-primary/50 via-transparent to-transparent" />
 
@@ -124,12 +119,7 @@ export function HeroSlider() {
           <div className="absolute inset-0 opacity-10">
             <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
               <defs>
-                <pattern
-                  id="grid"
-                  width="20"
-                  height="20"
-                  patternUnits="userSpaceOnUse"
-                >
+                <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
                   <circle cx="2" cy="2" r="1" fill="white" />
                 </pattern>
               </defs>
@@ -139,7 +129,7 @@ export function HeroSlider() {
         </motion.div>
       </AnimatePresence>
 
-      {/* Contenu principal */}
+      {/* Contenu */}
       <div className="relative z-10 flex h-full items-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl">
           <AnimatePresence mode="wait">
@@ -151,7 +141,7 @@ export function HeroSlider() {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="space-y-6"
             >
-              {/* Badge de slide */}
+              {/* Badge */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -205,7 +195,7 @@ export function HeroSlider() {
                 </Button>
               </motion.div>
 
-              {/* Indicateur de slide */}
+              {/* Indicateur */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -225,9 +215,8 @@ export function HeroSlider() {
         </div>
       </div>
 
-      {/* Contrôles en bas */}
+      {/* Contrôles */}
       <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-4">
-        {/* Indicateurs */}
         <div className="flex gap-2">
           {slides.map((_, index) => (
             <button
@@ -243,25 +232,17 @@ export function HeroSlider() {
             />
           ))}
         </div>
-
-        {/* Séparateur */}
         <span className="w-px h-6 bg-white/20" />
-
-        {/* Contrôle auto-play */}
         <button
           onClick={toggleAutoPlay}
           className="text-white/50 hover:text-white transition-colors"
           aria-label={isAutoPlaying ? 'Pause' : 'Lecture'}
         >
-          {isAutoPlaying ? (
-            <Pause className="h-4 w-4" />
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
+          {isAutoPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </button>
       </div>
 
-      {/* Boutons de navigation */}
+      {/* Navigation */}
       <button
         onClick={prev}
         className={cn(
@@ -273,7 +254,6 @@ export function HeroSlider() {
       >
         <ChevronLeft className="h-6 w-6" />
       </button>
-
       <button
         onClick={next}
         className={cn(
