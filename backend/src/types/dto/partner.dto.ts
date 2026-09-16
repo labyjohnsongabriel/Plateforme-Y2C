@@ -7,8 +7,11 @@ export interface PartnerDTO {
   website?: string;
   description?: string;
   isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  email?: string;
+  phone?: string;
+  displayOrder?: number;
+  createdAt: string; // ✅ ISO date string
+  updatedAt: string; // ✅ ISO date string
 }
 
 export interface CreatePartnerDTO {
@@ -16,6 +19,9 @@ export interface CreatePartnerDTO {
   logo?: string;
   website?: string;
   description?: string;
+  email?: string;
+  phone?: string;
+  displayOrder?: number;
   isActive?: boolean;
 }
 
@@ -24,6 +30,9 @@ export interface UpdatePartnerDTO {
   logo?: string;
   website?: string;
   description?: string;
+  email?: string;
+  phone?: string;
+  displayOrder?: number;
   isActive?: boolean;
 }
 
@@ -40,4 +49,14 @@ export interface PartnerListDTO {
     total: number;
     totalPages: number;
   };
+}
+
+// ✅ Demande de partenariat (public)
+export interface PartnerRequestDTO {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  message: string;
+  website?: string;
 }

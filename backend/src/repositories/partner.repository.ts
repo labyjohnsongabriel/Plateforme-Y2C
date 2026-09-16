@@ -11,13 +11,19 @@ export class PartnerRepository extends BaseRepository<
     super('partner');
   }
 
+  /**
+   * Récupère tous les partenaires actifs
+   */
   async findActive(): Promise<Partner[]> {
     return this.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'desc' }],
     });
   }
 
+  /**
+   * Recherche des partenaires par nom ou description
+   */
   async searchPartners(search: string): Promise<Partner[]> {
     return this.findMany({
       where: {
@@ -29,6 +35,9 @@ export class PartnerRepository extends BaseRepository<
     });
   }
 
+  /**
+   * Statistiques des partenaires
+   */
   async getStats(): Promise<{
     total: number;
     active: number;

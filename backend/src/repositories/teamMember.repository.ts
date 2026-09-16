@@ -1,5 +1,7 @@
+// src/repositories/teamMember.repository.ts
 import { BaseRepository } from './base.repository';
 import { Prisma, TeamMember } from '@prisma/client';
+import { prisma } from '../config/prisma';
 
 export class TeamMemberRepository extends BaseRepository<
   TeamMember,
@@ -15,18 +17,24 @@ export class TeamMemberRepository extends BaseRepository<
     return this.findFirst({ userId });
   }
 
-  async groupBy(field: string): Promise<Record<string, number>> {
-    const result = await this.execute(async () => {
-      return await this.model.groupBy({
-        by: [field],
-        _count: {
-          [field]: true,
-        },
-      });
+  async getStats(): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    byDepartment: Record<string, number>;
+  }> {
+    const total = await this.count();
+    const active = await this.count({ isActive: true });
+    const inactive = await this.count({ isActive: false });
+    const deptResult = await prisma.teamMember.groupBy({
+      by: ['department'],
+      _count: { department: true },
     });
-    return result.reduce((acc: Record<string, number>, item: any) => {
-      acc[item[field]] = item._count[field];
+    const byDepartment = deptResult.reduce<Record<string, number>>((acc, item) => {
+      const key = item.department || 'Non défini';
+      acc[key] = item._count.department;
       return acc;
     }, {});
+    return { total, active, inactive, byDepartment };
   }
 }

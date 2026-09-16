@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { TeamMemberService } from '../services/teamMember.service';
-import { AuthRequest } from '../middlewares/auth.middleware';
 
 export class TeamMemberController extends BaseController {
   private teamMemberService: TeamMemberService;

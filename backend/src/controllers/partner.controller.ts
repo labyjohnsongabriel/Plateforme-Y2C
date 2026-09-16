@@ -11,10 +11,13 @@ export class PartnerController extends BaseController {
     this.partnerService = new PartnerService();
   }
 
+  // ─── Routes publiques ──────────────────────────────────────
+
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
-      const partners = await this.partnerService.findAll(pagination);
+      const search = req.query.search as string;
+      const partners = await this.partnerService.findAll({ ...pagination, search });
       this.sendSuccess(res, partners);
     } catch (error) {
       this.handleError(next, error);
@@ -30,6 +33,27 @@ export class PartnerController extends BaseController {
       this.handleError(next, error);
     }
   };
+
+  getActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const partners = await this.partnerService.getActivePartners();
+      this.sendSuccess(res, partners);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // ✅ Demande de partenariat (publique)
+  requestPartnership = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.partnerService.requestPartnership(req.body);
+      this.sendCreated(res, result);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // ─── Routes admin ──────────────────────────────────────────
 
   create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -55,15 +79,6 @@ export class PartnerController extends BaseController {
       const { id } = req.params;
       await this.partnerService.delete(id);
       this.sendDeleted(res, null);
-    } catch (error) {
-      this.handleError(next, error);
-    }
-  };
-
-  getActive = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const partners = await this.partnerService.getActivePartners();
-      this.sendSuccess(res, partners);
     } catch (error) {
       this.handleError(next, error);
     }

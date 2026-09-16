@@ -1,5 +1,4 @@
-// backend/src/services/teamMember.service.ts
-
+// src/services/teamMember.service.ts
 import { BaseService } from './base.service';
 import { TeamMemberRepository } from '../repositories/teamMember.repository';
 import { UserRepository } from '../repositories/user.repository';
@@ -18,40 +17,65 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
   }
 
   async create(data: CreateTeamMemberDTO): Promise<TeamMember> {
+    // Vérifier que l'utilisateur existe
     const user = await this.userRepository.findByIdOrThrow(data.userId);
+
+    // Vérifier qu'il n'est pas déjà membre (userId est unique)
     const existing = await this.teamMemberRepository.findByUserId(data.userId);
     if (existing) {
-      throw ApiError.conflict('User is already a team member');
+      throw ApiError.conflict('Cet utilisateur est déjà membre de l’équipe');
     }
+
     const displayOrder = data.displayOrder || 0;
-    // ✅ Correction : utiliser "User" (majuscule) au lieu de "user"
-    return this.teamMemberRepository.create({
-      ...data,
+
+    // ✅ Nettoyer les champs : transformer les chaînes vides en null
+    // ✅ department est requis → on fournit une valeur par défaut si absent (normalement validé)
+    const cleanData = {
+      role: data.role,
+      department: data.department || 'Non défini', // fallback si requis
+      bio: data.bio || null,
+      photoUrl: data.photoUrl || null,
+      linkedin: data.linkedin || null,
       displayOrder,
       isActive: data.isActive !== undefined ? data.isActive : true,
-      User: {
-        connect: { id: data.userId }
-      }
+    };
+
+    // ✅ La relation s'appelle "User" (majuscule) selon le schéma Prisma
+    return this.teamMemberRepository.create({
+      ...cleanData,
+      User: {  // ← Attention : majuscule !
+        connect: { id: data.userId },
+      },
     });
   }
 
   async update(id: string, data: UpdateTeamMemberDTO): Promise<TeamMember> {
-    return this.teamMemberRepository.update(id, data);
+    // Vérifier que le membre existe
+    await this.teamMemberRepository.findByIdOrThrow(id);
+
+    // Nettoyer les données
+    const cleanData: any = {
+      role: data.role,
+      department: data.department !== undefined ? data.department : undefined,
+      bio: data.bio !== undefined ? (data.bio || null) : undefined,
+      photoUrl: data.photoUrl !== undefined ? (data.photoUrl || null) : undefined,
+      linkedin: data.linkedin !== undefined ? (data.linkedin || null) : undefined,
+      displayOrder: data.displayOrder,
+      isActive: data.isActive,
+    };
+
+    // Supprimer les propriétés undefined
+    Object.keys(cleanData).forEach(key => cleanData[key] === undefined && delete cleanData[key]);
+
+    return this.teamMemberRepository.update(id, cleanData);
   }
 
   async getActiveMembers(): Promise<TeamMember[]> {
     return this.teamMemberRepository.findMany({
       where: { isActive: true },
-      // ✅ Correction : "User" au lieu de "user"
       include: {
-        User: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true,
-          },
+        User: {  // ← Majuscule
+          select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
         },
       },
       orderBy: { displayOrder: 'asc' },
@@ -61,16 +85,9 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
   async getByDepartment(department: string): Promise<TeamMember[]> {
     return this.teamMemberRepository.findMany({
       where: { department, isActive: true },
-      // ✅ Correction : "User" au lieu de "user"
       include: {
-        User: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            avatar: true,
-          },
+        User: {  // ← Majuscule
+          select: { id: true, firstName: true, lastName: true, email: true, avatar: true },
         },
       },
     });
@@ -78,40 +95,33 @@ export class TeamMemberService extends BaseService<TeamMember, CreateTeamMemberD
 
   async reorder(memberIds: string[]): Promise<void> {
     for (let i = 0; i < memberIds.length; i++) {
-      await this.teamMemberRepository.update(memberIds[i], {
-        displayOrder: i,
-      });
+      await this.teamMemberRepository.update(memberIds[i], { displayOrder: i });
     }
   }
 
   async toggleActive(id: string): Promise<TeamMember> {
     const member = await this.teamMemberRepository.findByIdOrThrow(id);
-    return this.teamMemberRepository.update(id, {
-      isActive: !member.isActive,
-    });
+    return this.teamMemberRepository.update(id, { isActive: !member.isActive });
   }
 
   async getStats(): Promise<any> {
-    const total = await this.teamMemberRepository.count();
-    const active = await this.teamMemberRepository.count({ isActive: true });
-    const inactive = await this.teamMemberRepository.count({ isActive: false });
-    const byDepartment = await this.teamMemberRepository.groupBy('department');
-    return { total, active, inactive, byDepartment };
+    return this.teamMemberRepository.getStats();
   }
 
-  // ✅ Correction : l'objet inclus est "User" (majuscule)
   toDTO(member: TeamMember & { User?: any }): any {
     return {
       id: member.id,
       userId: member.userId,
-      user: member.User ? {
-        id: member.User.id,
-        firstName: member.User.firstName,
-        lastName: member.User.lastName,
-        fullName: `${member.User.firstName} ${member.User.lastName}`,
-        email: member.User.email,
-        avatar: member.User.avatar,
-      } : undefined,
+      user: member.User
+        ? {
+            id: member.User.id,
+            firstName: member.User.firstName,
+            lastName: member.User.lastName,
+            fullName: `${member.User.firstName || ''} ${member.User.lastName || ''}`.trim(),
+            email: member.User.email,
+            avatar: member.User.avatar,
+          }
+        : undefined,
       role: member.role,
       department: member.department,
       bio: member.bio,
