@@ -1,4 +1,3 @@
-// src/middlewares/validate.middleware.ts
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, ValidationChain, ValidationError } from 'express-validator';
 import { ApiError } from '../utils/ApiError';
@@ -34,6 +33,3 @@ export const validate = (validations: ValidationChain[]) => {
     }
   };
 };
-
-// Optionnel : validateBody, validateQuery, validateParams restent les mêmes
-// Je ne les répète pas pour gagner de la place, mais vous pouvez les garder tels quels.
