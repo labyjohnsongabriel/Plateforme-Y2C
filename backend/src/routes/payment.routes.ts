@@ -81,4 +81,6 @@ router.patch(
   paymentController.refundPayment
 );
 
+router.post('/:id/send-receipt', paymentController.sendReceipt);
+
 export default router;

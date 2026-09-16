@@ -113,4 +113,14 @@ export class PaymentController extends BaseController {
       this.handleError(next, error);
     }
   };
+
+    sendReceipt = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const result = await this.paymentService.sendReceipt(id);
+      this.sendSuccess(res, result, 'Reçu envoyé par email');
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
 }

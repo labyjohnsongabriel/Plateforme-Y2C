@@ -1,6 +1,19 @@
 import { PaymentStatus, PaymentMethod } from '../roles.enum';
 import { PaginationParams } from '../index';
 
+
+export enum PaymentMethod {
+  MOBILE_MONEY = 'mobile_money',
+  BANK_TRANSFER = 'bank_transfer',
+}
+
+export enum MobileMoneyOperator {
+  MVOLA = 'MVola',
+  AIRTEL = 'Airtel Money',
+  ORANGE = 'Orange Money',
+  TELMA = 'Telma Money',
+}
+
 export interface PaymentDTO {
   id: string;
   registrationId?: string;
