@@ -4,7 +4,6 @@ import './globals.css';
 import { Providers } from './providers';
 import { siteConfig } from '@/config/site';
 
-// Polices optimisées avec display swap
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
@@ -20,7 +19,6 @@ const ubuntu = Ubuntu({
   preload: true,
 });
 
-// Métadonnées complètes
 export const metadata: Metadata = {
   title: {
     default: siteConfig.name,
@@ -96,7 +94,6 @@ export const metadata: Metadata = {
   },
 };
 
-// Viewport configuration
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -130,9 +127,7 @@ export default function RootLayout({
       >
         <Providers>
           <div className="flex min-h-screen flex-col">
-            <main className="flex-1">
-              {children}
-            </main>
+            <main className="flex-1">{children}</main>
           </div>
         </Providers>
       </body>

@@ -3,6 +3,9 @@
 
 import { useAuth } from '@/hooks/useAuth';
 
+// ============================================================
+// TYPES
+// ============================================================
 export type Permission =
   | 'view_dashboard'
   | 'manage_users'
@@ -15,12 +18,25 @@ export type Permission =
   | 'manage_team'
   | 'manage_partners'
   | 'manage_recruitments'
-  | 'manage_payments'
+  | 'manage_payments'      // ✅ corrigé
   | 'manage_contact'
   | 'export_data'
   | 'view_reports';
 
-const ROLE_PERMISSIONS: Record<string, Permission[]> = {
+export type Role =
+  | 'SUPER_ADMIN'
+  | 'ADMIN'
+  | 'EDITOR'
+  | 'CONTRIBUTOR'
+  | 'MEMBER_Y2C'
+  | 'USER'
+  | 'VIEWER'
+  | 'VISITOR'; // 🔓 visiteur non connecté
+
+// ============================================================
+// MATRICE RÔLE → PERMISSIONS
+// ============================================================
+const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   SUPER_ADMIN: [
     'view_dashboard',
     'manage_users',
@@ -49,13 +65,11 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'manage_team',
     'manage_partners',
     'manage_recruitments',
-    'manage_payments',
+    'manage_payments',   // ✅ ADMIN gère les paiements
     'manage_contact',
     'export_data',
     'view_reports',
   ],
-  // ✅ Correction : les éditeurs peuvent gérer tout le contenu
-  // sauf les utilisateurs, rôles, paiements, export et rapports
   EDITOR: [
     'view_dashboard',
     'manage_articles',
@@ -68,21 +82,30 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     'manage_recruitments',
     'manage_contact',
   ],
-  CONTRIBUTOR: [
-    'view_dashboard',
-  ],
+  CONTRIBUTOR: ['view_dashboard'],
+  MEMBER_Y2C: [],
+  USER: [],
   VIEWER: [],
+  VISITOR: [], // 🔓 rien à voir avec l'admin — juste navigation publique
 };
 
+// ============================================================
+// HOOK PRINCIPAL
+// ============================================================
 export const usePermissions = () => {
   const { user } = useAuth();
 
-  const role = user?.role || 'VIEWER';
-  const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
+  // 🔓 Si pas d'utilisateur → VISITOR (pas VIEWER)
+  //    Ça évite de bloquer les pages publiques.
+  const role: Role = (user?.role as Role) || 'VISITOR';
+  const isAuthenticated = !!user;
+
   const isSuperAdmin = role === 'SUPER_ADMIN';
+  const isAdmin = role === 'ADMIN' || isSuperAdmin;
   const isEditor = role === 'EDITOR';
   const isContributor = role === 'CONTRIBUTOR';
   const isViewer = role === 'VIEWER';
+  const isVisitor = role === 'VISITOR';
 
   const hasRole = (roles: string[]): boolean => roles.includes(role);
 
@@ -97,23 +120,45 @@ export const usePermissions = () => {
   const hasAllPermissions = (permissions: Permission[]): boolean =>
     permissions.every((p) => hasPermission(p));
 
+  // ─── Helpers métier ───
   return {
+    // Rôle & état
     role,
-    isAdmin,
+    isAuthenticated,
     isSuperAdmin,
+    isAdmin,
     isEditor,
     isContributor,
     isViewer,
+    isVisitor,
+
+    // Helpers génériques
     hasRole,
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    canManageUsers: isAdmin || isSuperAdmin,
+
+    // 🔑 Helpers spécifiques (source de vérité)
+    canManageUsers: isAdmin,
     canManageRoles: isSuperAdmin,
-    canEditContent: isEditor || isAdmin || isSuperAdmin,
-    canViewDashboard: !!user,
-    canManageSettings: isAdmin || isSuperAdmin,
-    canExportData: isAdmin || isSuperAdmin,
-    canViewReports: isAdmin || isSuperAdmin,
+    canManagePayments: isAdmin,       // ✅ 'manage_payments' exposé
+    canEditContent: isEditor || isAdmin,
+    canViewDashboard: isAuthenticated, // ✅ tout utilisateur connecté
+    canManageSettings: isAdmin,
+    canExportData: isAdmin,
+    canViewReports: isAdmin,
+
+    // 🔓 Public — visiteur peut naviguer partout sur le site public
+    canBrowsePublic: true,
   };
 };
+
+// ============================================================
+// EXPORTS UTILITAIRES (hors hook — pour SSR/middleware)
+// ============================================================
+export function roleHasPermission(role: Role, permission: Permission): boolean {
+  if (role === 'SUPER_ADMIN') return true;
+  return (ROLE_PERMISSIONS[role] || []).includes(permission);
+}
+
+export { ROLE_PERMISSIONS };

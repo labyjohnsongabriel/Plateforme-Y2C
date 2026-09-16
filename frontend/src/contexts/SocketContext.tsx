@@ -7,217 +7,337 @@ import React, {
   useState,
   useCallback,
   useMemo,
-  ReactNode,
   useRef,
+  type ReactNode,
 } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { useAuthStore } from '@/store/auth.store';
+import { io, type Socket } from 'socket.io-client';
+import { useAuth } from '@/hooks/useAuth';
 import { useNotificationStore } from '@/store/notification.store';
-import { NotificationPayload, ChatMessage, PresencePayload } from '@/types';
+import type { NotificationPayload } from '@/types';
 import toast from 'react-hot-toast';
 
-interface SocketContextType {
+// ============================================================
+// TYPES
+// ============================================================
+export type SocketStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'disconnected'
+  | 'error'
+  | 'disabled';
+
+export interface SocketContextType {
   socket: Socket | null;
+  status: SocketStatus;
   isConnected: boolean;
   isLoading: boolean;
+  error: Error | null;
   connect: () => void;
   disconnect: () => void;
-  emit: (event: string, data: any) => void;
+  emit: (event: string, data?: any) => void;
   on: (event: string, callback: (data: any) => void) => void;
   off: (event: string, callback?: (data: any) => void) => void;
 }
 
-const SocketContext = createContext<SocketContextType | undefined>(undefined);
+// ============================================================
+// CONFIG — Safe defaults
+// ============================================================
+const ENABLE_SOCKET = process.env.NEXT_PUBLIC_ENABLE_SOCKET !== 'false';
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 2000;
+const CONNECTION_TIMEOUT = 8000;
 
+// Debug conditionnel (jamais en prod)
+const DEBUG =
+  process.env.NEXT_PUBLIC_SOCKET_DEBUG === 'true' &&
+  process.env.NODE_ENV !== 'production';
+
+const log = (...args: any[]) => {
+  if (DEBUG) console.log('[Socket]', ...args);
+};
+
+const logError = (...args: any[]) => {
+  if (DEBUG) console.error('[Socket]', ...args);
+};
+
+// ============================================================
+// CONTEXT
+// ============================================================
+const SocketContext = createContext<SocketContextType | undefined>(undefined);
+SocketContext.displayName = 'SocketContext';
+
+// ============================================================
+// PROVIDER
+// ============================================================
 interface SocketProviderProps {
   children: ReactNode;
 }
 
-// ✅ Permettre la désactivation complète via variable d'environnement
-const ENABLE_SOCKET = process.env.NEXT_PUBLIC_ENABLE_SOCKET !== 'false';
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
-
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user, isAuthenticated, tokens } = useAuth();
+  const { addNotification, setUnreadCount, markAsRead } =
+    useNotificationStore();
+
   const socketRef = useRef<Socket | null>(null);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const isMounted = useRef(true);
+  const didShowErrorToast = useRef(false);
 
-  const { tokens, isAuthenticated } = useAuthStore();
-  const {
-    addNotification,
-    setUnreadCount,
-    markAsRead: markNotificationAsRead,
-  } = useNotificationStore();
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [status, setStatus] = useState<SocketStatus>(
+    ENABLE_SOCKET ? 'idle' : 'disabled'
+  );
+  const [error, setError] = useState<Error | null>(null);
 
+  // ─── Cleanup unmount ───
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // ============================================================
+  // CONNECT — Safe
+  // ============================================================
   const connect = useCallback(() => {
-    // ✅ Vérifier si Socket.IO est activé
+    // 1) Socket désactivé
     if (!ENABLE_SOCKET) {
-      setIsLoading(false);
-      console.log('🔌 Socket.IO désactivé par configuration');
+      setStatus('disabled');
       return;
     }
 
+    // 2) Pas authentifié → ne rien faire
     if (!isAuthenticated || !tokens?.accessToken) {
-      setIsLoading(false);
+      setStatus('idle');
       return;
     }
 
+    // 3) Déjà connecté
     if (socketRef.current?.connected) {
-      setIsConnected(true);
-      setIsLoading(false);
+      setStatus('connected');
       return;
     }
 
+    // 4) Nettoyer l'ancienne instance
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    // 5) Créer la nouvelle
     try {
-      setIsLoading(true);
+      setStatus('connecting');
+      setError(null);
+
+      log('Connexion à', SOCKET_URL);
+
       const newSocket = io(SOCKET_URL, {
-        auth: {
-          token: tokens.accessToken,
-        },
+        auth: { token: tokens.accessToken },
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 3,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 10000,
+        reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
+        reconnectionDelay: RECONNECT_DELAY,
+        reconnectionDelayMax: 10000,
+        timeout: CONNECTION_TIMEOUT,
+        autoConnect: true,
+        withCredentials: true,
       });
 
       socketRef.current = newSocket;
       setSocket(newSocket);
 
-      newSocket.on('connect', () => {
-        console.log('🔌 Socket.IO connected');
-        setIsConnected(true);
-        setIsLoading(false);
+      // ─── Handlers ───
+      const onConnect = () => {
+        if (!isMounted.current) return;
+        log('✅ Connecté');
+        setStatus('connected');
+        setError(null);
         reconnectAttempts.current = 0;
-        toast.success('Connexion temps réel établie');
-      });
+        didShowErrorToast.current = false;
 
-      newSocket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error);
-        reconnectAttempts.current += 1;
-        if (reconnectAttempts.current >= maxReconnectAttempts) {
-          setIsLoading(false);
-          // ✅ Ne pas afficher d'erreur pour ne pas déranger l'utilisateur
+        // Rejoindre les rooms
+        if (user?.id) newSocket.emit('room:join', { room: `user:${user.id}` });
+        if (user?.role)
+          newSocket.emit('room:join', { room: `role:${user.role}` });
+      };
+
+      const onDisconnect = (reason: string) => {
+        if (!isMounted.current) return;
+        log('🔌 Déconnecté:', reason);
+        setStatus('disconnected');
+
+        // Reconnexion manuelle si serveur nous a kick
+        if (reason === 'io server disconnect') {
+          log('Reconnexion forcée…');
+          setTimeout(() => newSocket.connect(), 1000);
         }
-      });
+      };
 
-      newSocket.on('disconnect', (reason) => {
-        console.log('🔌 Socket.IO disconnected:', reason);
-        setIsConnected(false);
-      });
+      const onConnectError = (err: Error) => {
+        if (!isMounted.current) return;
+        reconnectAttempts.current += 1;
+        logError('❌ Erreur connexion:', err.message);
 
-      newSocket.on('reconnect', () => {
-        console.log('🔌 Socket.IO reconnected');
-        setIsConnected(true);
+        setError(err);
+        setStatus('error');
+
+        // Toast seulement 1 fois (évite spam)
+        if (
+          reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS &&
+          !didShowErrorToast.current
+        ) {
+          didShowErrorToast.current = true;
+          toast.error(
+            'Connexion temps réel indisponible. Mode dégradé activé.',
+            { duration: 5000, id: 'socket-error' }
+          );
+        }
+      };
+
+      const onReconnectAttempt = () => {
+        if (!isMounted.current) return;
+        setStatus('connecting');
+      };
+
+      const onReconnect = () => {
+        if (!isMounted.current) return;
+        log('🔄 Reconnecté');
+        setStatus('connected');
+        setError(null);
         reconnectAttempts.current = 0;
+        didShowErrorToast.current = false;
+      };
+
+      newSocket.on('connect', onConnect);
+      newSocket.on('disconnect', onDisconnect);
+      newSocket.on('connect_error', onConnectError);
+      newSocket.io.on('reconnect_attempt', onReconnectAttempt);
+      newSocket.io.on('reconnect', onReconnect);
+      newSocket.io.on('reconnect_failed', () => {
+        logError('Reconnexion échouée définitivement');
+        setStatus('error');
       });
 
-      // Écouteurs d'événements (les mêmes que votre code)
+      // ─── Notifications ───
       newSocket.on('notification:receive', (payload: NotificationPayload) => {
+        if (!isMounted.current) return;
         addNotification(payload);
-        toast.success(payload.title, { duration: 5000 });
+        showNotificationToast(payload);
       });
 
       newSocket.on('notification:count', (data: { unread: number }) => {
+        if (!isMounted.current) return;
         setUnreadCount(data.unread);
       });
 
-      newSocket.on('notification:updated', (data: { id: string; isRead: boolean }) => {
-        if (data.isRead) {
-          markNotificationAsRead(data.id);
+      newSocket.on(
+        'notification:updated',
+        (data: { id: string; isRead: boolean }) => {
+          if (!isMounted.current) return;
+          if (data.isRead) markAsRead(data.id);
         }
-      });
+      );
 
-      newSocket.on('chat:receive', (message: ChatMessage) => {
-        console.log('📩 Nouveau message:', message);
-      });
-
-      newSocket.on('presence:list', (users: PresencePayload[]) => {
-        console.log('👤 Utilisateurs en ligne:', users);
-      });
-
-      newSocket.on('presence:update', (data: PresencePayload) => {
-        console.log(`👤 ${data.userId} est ${data.status}`);
-      });
-
-      newSocket.on('broadcast:receive', (data: any) => {
+      newSocket.on('broadcast:receive', (data: { message: string }) => {
+        if (!isMounted.current) return;
         toast.info(data.message, { duration: 8000 });
       });
-
-    } catch (error) {
-      console.error('Socket.IO initialization error:', error);
-      setIsLoading(false);
+    } catch (err) {
+      logError('Erreur initialisation:', err);
+      setStatus('error');
+      setError(err instanceof Error ? err : new Error(String(err)));
     }
-  }, [isAuthenticated, tokens, addNotification, setUnreadCount, markNotificationAsRead]);
+  }, [isAuthenticated, tokens?.accessToken, user?.id, user?.role, addNotification, setUnreadCount, markAsRead]);
 
+  // ============================================================
+  // DISCONNECT — Safe
+  // ============================================================
   const disconnect = useCallback(() => {
     if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.io.removeAllListeners();
       socketRef.current.disconnect();
       socketRef.current = null;
+    }
+    if (isMounted.current) {
       setSocket(null);
-      setIsConnected(false);
-      setIsLoading(false);
+      setStatus(ENABLE_SOCKET ? 'idle' : 'disabled');
+      setError(null);
     }
   }, []);
 
-  const emit = useCallback((event: string, data: any) => {
+  // ============================================================
+  // WRAPPERS — Safe
+  // ============================================================
+  const emit = useCallback((event: string, data?: any) => {
     if (socketRef.current?.connected) {
       socketRef.current.emit(event, data);
+    } else if (DEBUG) {
+      log('emit ignoré (non connecté):', event);
     }
   }, []);
 
-  const on = useCallback((event: string, callback: (data: any) => void) => {
+  const on = useCallback((event: string, cb: (data: any) => void) => {
+    if (socketRef.current) socketRef.current.on(event, cb);
+  }, []);
+
+  const off = useCallback((event: string, cb?: (data: any) => void) => {
     if (socketRef.current) {
-      socketRef.current.on(event, callback);
+      if (cb) socketRef.current.off(event, cb);
+      else socketRef.current.off(event);
     }
   }, []);
 
-  const off = useCallback((event: string, callback?: (data: any) => void) => {
-    if (socketRef.current) {
-      if (callback) {
-        socketRef.current.off(event, callback);
-      } else {
-        socketRef.current.off(event);
-      }
-    }
-  }, []);
-
+  // ============================================================
+  // AUTO-CONNECT / AUTO-DISCONNECT
+  // ============================================================
   useEffect(() => {
-    if (isAuthenticated && tokens?.accessToken && ENABLE_SOCKET) {
-      connect();
-    } else {
-      disconnect();
-    }
-    return () => {
-      disconnect();
-    };
-  }, [isAuthenticated, tokens?.accessToken, connect, disconnect]);
+    // Petit délai pour éviter les races au mount
+    const timeout = setTimeout(() => {
+      if (isAuthenticated && tokens?.accessToken && ENABLE_SOCKET) {
+        connect();
+      } else {
+        disconnect();
+      }
+    }, 100);
 
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, tokens?.accessToken]);
+
+  // ─── Cleanup définitif au démontage ───
   useEffect(() => {
     return () => {
       if (socketRef.current) {
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
   }, []);
 
-  const value = useMemo(
+  // ============================================================
+  // VALUE (memoïsée)
+  // ============================================================
+  const value = useMemo<SocketContextType>(
     () => ({
       socket,
-      isConnected,
-      isLoading,
+      status,
+      isConnected: status === 'connected',
+      isLoading: status === 'connecting',
+      error,
       connect,
       disconnect,
       emit,
       on,
       off,
     }),
-    [socket, isConnected, isLoading, connect, disconnect, emit, on, off]
+    [socket, status, error, connect, disconnect, emit, on, off]
   );
 
   return (
@@ -225,12 +345,105 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   );
 };
 
-export const useSocket = () => {
-  const context = useContext(SocketContext);
-  if (context === undefined) {
-    throw new Error('useSocket must be used within a SocketProvider');
+// ============================================================
+// TOAST NOTIFICATION — Extraite pour la propreté
+// ============================================================
+function showNotificationToast(payload: NotificationPayload) {
+  toast.custom(
+    (t) => (
+      <div
+        className={`${
+          t.visible ? 'animate-enter' : 'animate-leave'
+        } pointer-events-auto flex w-full max-w-md rounded-lg bg-white shadow-xl ring-1 ring-black/5 dark:bg-gray-800`}
+      >
+        <div className="w-0 flex-1 p-4">
+          <div className="flex items-start">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-secondary/10">
+              <span className="text-lg text-secondary">🔔</span>
+            </div>
+            <div className="ml-3 flex-1">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {payload.title || 'Nouvelle notification'}
+              </p>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {payload.message}
+              </p>
+              {payload.link && (
+                <a
+                  href={payload.link}
+                  className="mt-2 text-sm font-medium text-secondary hover:text-secondary/80"
+                  onClick={() => toast.dismiss(t.id)}
+                >
+                  Voir →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex border-l border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex w-full items-center justify-center rounded-r-lg p-4 text-sm text-gray-400 hover:bg-gray-50 hover:text-gray-500 dark:hover:bg-gray-700"
+            aria-label="Fermer"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    ),
+    { duration: 5000, position: 'bottom-right' }
+  );
+
+  // Son (silencieux si bloqué par le navigateur)
+  try {
+    const audio = new Audio('/sounds/notification.mp3');
+    audio.volume = 0.4;
+    audio.play().catch(() => {});
+  } catch {}
+}
+
+// ============================================================
+// HOOKS EXPORTÉS
+// ============================================================
+
+/** Hook interne — retourne le contexte brut (peut être undefined) */
+export function useContextSocket(): SocketContextType | undefined {
+  return useContext(SocketContext);
+}
+
+/**
+ * Hook public — NE THROW JAMAIS.
+ * Retourne un fallback inactif si le provider est absent,
+ * pour ne JAMAIS faire crasher l'app.
+ */
+export function useSocket(): SocketContextType {
+  const ctx = useContext(SocketContext);
+
+  if (!ctx) {
+    if (DEBUG) {
+      console.warn('[useSocket] SocketProvider absent → fallback inactif');
+    }
+    return FALLBACK_CONTEXT;
   }
-  return context;
+  return ctx;
+}
+
+export const useSocketContext = useSocket;
+
+// ============================================================
+// FALLBACK (jamais de crash)
+// ============================================================
+const FALLBACK_CONTEXT: SocketContextType = {
+  socket: null,
+  status: 'disabled',
+  isConnected: false,
+  isLoading: false,
+  error: null,
+  connect: () => {},
+  disconnect: () => {},
+  emit: () => {},
+  on: () => {},
+  off: () => {},
 };
 
 export default SocketContext;
