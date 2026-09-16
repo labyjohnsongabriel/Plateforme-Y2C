@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { BaseController } from './base.controller';
 import { RecruitmentService } from '../services/recruitment.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { uploadCV } from '../middlewares/uploadCV.middleware';
+import { ApiError } from '../utils/ApiError';
 
 export class RecruitmentController extends BaseController {
   private recruitmentService: RecruitmentService;
@@ -90,14 +92,34 @@ export class RecruitmentController extends BaseController {
   };
 
   // ============ CANDIDATURES ============
-  applyForPosition = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const candidature = await this.recruitmentService.applyForPosition(req.body);
-      this.sendCreated(res, candidature);
-    } catch (error) {
-      this.handleError(next, error);
-    }
-  };
+  
+  // ✅ Méthode avec upload du CV
+  applyForPosition = [
+    uploadCV.single('cv'), // le champ du formulaire doit s'appeler 'cv'
+    async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        const file = req.file;
+        if (!file) {
+          throw ApiError.badRequest('Le CV est requis.');
+        }
+
+        // Générer l'URL absolue du fichier
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+        const cvUrl = `${baseUrl}/uploads/cvs/${file.filename}`;
+
+        // Ajouter cvUrl aux données du corps
+        const data = {
+          ...req.body,
+          cvUrl,
+        };
+
+        const candidature = await this.recruitmentService.applyForPosition(data);
+        this.sendCreated(res, candidature);
+      } catch (error) {
+        this.handleError(next, error);
+      }
+    },
+  ];
 
   getCandidatures = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

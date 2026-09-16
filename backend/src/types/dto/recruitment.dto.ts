@@ -10,7 +10,7 @@ export interface RecruitmentDTO {
   position: string;
   isActive: boolean;
   deadline?: Date;
-  createdAt: Date;
+  createdAt: Date;q
   updatedAt: Date;
   candidatures?: CandidatureDTO[];
 }

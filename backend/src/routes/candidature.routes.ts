@@ -13,102 +13,29 @@ import {
 const router = Router();
 const candidatureController = new CandidatureController();
 
-// Admin routes
-router.get(
-  '/',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getAll
-);
+// Toutes les routes admin (authentification requise)
+router.use(authMiddleware, isAdmin);
 
-router.get(
-  '/stats',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getStats
-);
+// ─── Candidatures ──────────────────────────────────────────
+router.get('/', candidatureController.getAll);
+router.get('/stats', candidatureController.getStats);
+router.get('/recruitment/:recruitmentId', candidatureController.getByRecruitment);
+router.get('/:id', candidatureController.getById);
+router.post('/', validate(createCandidatureValidator), candidatureController.create);
+router.put('/:id', validate(updateCandidatureValidator), candidatureController.update);
+router.delete('/:id', candidatureController.delete);
 
-router.get(
-  '/recruitment/:recruitmentId',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getByRecruitment
-);
+// ─── Interviews ────────────────────────────────────────────
+router.post('/:id/interviews', validate(createInterviewValidator), candidatureController.scheduleInterview);
+router.put('/interviews/:id', candidatureController.updateInterview);
+router.get('/:id/interviews', candidatureController.getInterviews);
 
-router.get(
-  '/:id',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getById
-);
+// ─── Evaluations ───────────────────────────────────────────
+router.post('/:id/evaluations', validate(createEvaluationValidator), candidatureController.addEvaluation);
+router.get('/:id/evaluations', candidatureController.getEvaluations);
+router.get('/:id/score', candidatureController.getAverageScore);
 
-router.post(
-  '/',
-  authMiddleware,
-  isAdmin,
-  validate(createCandidatureValidator),
-  candidatureController.create
-);
-
-router.put(
-  '/:id',
-  authMiddleware,
-  isAdmin,
-  validate(updateCandidatureValidator),
-  candidatureController.update
-);
-
-router.delete(
-  '/:id',
-  authMiddleware,
-  isAdmin,
-  candidatureController.delete
-);
-
-// Interview routes
-router.post(
-  '/:id/interviews',
-  authMiddleware,
-  isAdmin,
-  validate(createInterviewValidator),
-  candidatureController.scheduleInterview
-);
-
-router.put(
-  '/interviews/:id',
-  authMiddleware,
-  isAdmin,
-  candidatureController.updateInterview
-);
-
-router.get(
-  '/:id/interviews',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getInterviews
-);
-
-// Evaluation routes
-router.post(
-  '/:id/evaluations',
-  authMiddleware,
-  isAdmin,
-  validate(createEvaluationValidator),
-  candidatureController.addEvaluation
-);
-
-router.get(
-  '/:id/evaluations',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getEvaluations
-);
-
-router.get(
-  '/:id/score',
-  authMiddleware,
-  isAdmin,
-  candidatureController.getAverageScore
-);
+// ─── Envoi du rapport par email ───────────────────────────
+router.post('/:id/send-evaluation-report', candidatureController.sendEvaluationReport);
 
 export default router;

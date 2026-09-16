@@ -12,6 +12,7 @@ export class CandidatureController extends BaseController {
   }
 
   // ============ CANDIDATURES ============
+
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const pagination = this.getPaginationParams(req);
@@ -81,6 +82,7 @@ export class CandidatureController extends BaseController {
   };
 
   // ============ INTERVIEWS ============
+
   scheduleInterview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -112,15 +114,14 @@ export class CandidatureController extends BaseController {
   };
 
   // ============ EVALUATIONS ============
+
   addEvaluation = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      // ✅ Récupérer l'ID de l'utilisateur connecté
       const evaluatorId = req.user?.id;
       if (!evaluatorId) {
         throw new Error('User not authenticated');
       }
-      // ✅ Passer les 3 arguments (candidatureId, data, evaluatorId)
       const evaluation = await this.candidatureService.addEvaluation(id, req.body, evaluatorId);
       this.sendCreated(res, evaluation);
     } catch (error) {
@@ -143,6 +144,18 @@ export class CandidatureController extends BaseController {
       const { id } = req.params;
       const score = await this.candidatureService.getAverageScore(id);
       this.sendSuccess(res, { averageScore: score });
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // ============ ENVOI DU RAPPORT ============
+
+  sendEvaluationReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      await this.candidatureService.sendEvaluationReport(id);
+      this.sendSuccess(res, null, 'Rapport d’évaluation envoyé');
     } catch (error) {
       this.handleError(next, error);
     }

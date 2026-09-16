@@ -13,7 +13,8 @@ import {
 const router = Router();
 const recruitmentController = new RecruitmentController();
 
-// Public routes
+// ─── Routes publiques ──────────────────────────────────────
+
 router.get(
   '/',
   cacheMiddleware(300),
@@ -38,13 +39,15 @@ router.get(
   recruitmentController.getById
 );
 
+// ✅ Candidature avec upload de fichier (multipart)
+// On utilise le middleware applyForPosition qui contient uploadCV
 router.post(
   '/apply',
-  validate(createCandidatureValidator),
   recruitmentController.applyForPosition
 );
 
-// Admin routes
+// ─── Routes admin (authentifiées) ────────────────────────
+
 router.post(
   '/',
   authMiddleware,
