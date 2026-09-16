@@ -10,15 +10,16 @@ import projectRoutes from './project.routes';
 import eventRoutes from './event.routes';
 import contactRoutes from './contact.routes';
 import paymentRoutes from './payment.routes';
-import partnerRoutes from './partner.routes';
+//import partnerRoutes from './partner.routes';
 import recruitmentRoutes from './recruitment.routes';
 import candidatureRoutes from './candidature.routes';
 import teamMemberRoutes from './teamMember.routes';
 import dashboardRoutes from './dashboard.routes';
 import statsRoutes from './stats.routes';
-import exportRoutes from './export.routes';
+import exportRoutes from './export.routes'; // ✅ importé
 import uploadRoutes from './upload.routes';
 import notificationRoutes from './notification.routes';
+import settingRoutes from './setting.routes';
 
 const router = Router();
 
@@ -254,12 +255,19 @@ router.get('/docs', (_req: Request, res: Response) => {
         realtime: 'GET /api/stats/realtime',
       },
       export: {
-        registrations: 'GET /api/export/registrations/:format',
-        members: 'GET /api/export/members/:format',
-        payments: 'GET /api/export/payments/:format',
-        formations: 'GET /api/export/formations/:format',
-        projects: 'GET /api/export/projects/:format',
-        articles: 'GET /api/export/articles/:format',
+        // ✅ Correction des chemins pour correspondre aux vraies routes
+        history: 'GET /api/exports',
+        stats: 'GET /api/exports/stats',
+        create: 'POST /api/exports',
+        get: 'GET /api/exports/:id',
+        delete: 'DELETE /api/exports/:id',
+        download: 'GET /api/exports/:id/download',
+        registrations: 'GET /api/exports/registrations/:format',
+        members: 'GET /api/exports/members/:format',
+        payments: 'GET /api/exports/payments/:format',
+        formations: 'GET /api/exports/formations/:format',
+        projects: 'GET /api/exports/projects/:format',
+        articles: 'GET /api/exports/articles/:format',
       },
       upload: {
         single: 'POST /api/upload/single',
@@ -283,14 +291,15 @@ router.use('/projects', projectRoutes);
 router.use('/events', eventRoutes);
 router.use('/contact', contactRoutes);
 router.use('/payments', paymentRoutes);
-router.use('/partners', partnerRoutes);
+//router.use('/partners', partnerRoutes);
 router.use('/recruitments', recruitmentRoutes);
 router.use('/candidatures', candidatureRoutes);
 router.use('/team', teamMemberRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/stats', statsRoutes);
-router.use('/export', exportRoutes);
+router.use('/exports', exportRoutes); // ✅ Modifié : '/export' → '/exports'
 router.use('/upload', uploadRoutes);
+router.use('/settings', settingRoutes);
 router.use('/notifications', notificationRoutes);
 
 export default router;
