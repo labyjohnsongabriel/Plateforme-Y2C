@@ -1,4 +1,3 @@
-// app/(public)/projets/components/FeaturedProjects.tsx
 'use client';
 
 import { motion } from 'framer-motion';
@@ -8,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Project } from '@/types';
+import { buildImageUrl } from '@/lib/imageUtils';
 
 interface FeaturedProjectsProps {
   projects: Project[];
@@ -30,32 +30,17 @@ export function FeaturedProjects({ projects }: FeaturedProjectsProps) {
     >
       <Card className="overflow-hidden border-2 border-secondary/20 shadow-lg hover:shadow-xl transition-shadow">
         <div className="grid md:grid-cols-2">
-          {/* Image */}
           <div className="aspect-video md:aspect-auto bg-gradient-to-br from-primary/10 to-secondary/10 relative">
             {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={imageUrl}
-                alt={featured.title}
-                className="h-full w-full object-cover"
-                loading="lazy"
-              />
+              <img src={buildImageUrl(imageUrl, false)} alt={featured.title} className="h-full w-full object-cover" loading="lazy" />
             ) : (
-              <div className="flex h-full items-center justify-center">
-                <span className="text-6xl font-bold text-primary/20">★</span>
-              </div>
+              <div className="flex h-full items-center justify-center text-6xl font-bold text-primary/20">★</div>
             )}
-            <Badge className="absolute right-4 top-4 bg-secondary text-white shadow-lg">
-              Projet vedette
-            </Badge>
+            <Badge className="absolute right-4 top-4 bg-secondary text-white shadow-lg">Projet vedette</Badge>
           </div>
-
-          {/* Contenu */}
           <CardContent className="flex flex-col justify-center p-6 md:p-8">
             <h3 className="font-ubuntu text-2xl font-bold">{featured.title}</h3>
-            <p className="mt-2 text-muted-foreground line-clamp-3">
-              {featured.description}
-            </p>
+            <p className="mt-2 text-muted-foreground line-clamp-3">{featured.description}</p>
             {displayTechnologies.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {displayTechnologies.map((tech: string) => (

@@ -4,6 +4,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { TeamMember } from '@/types';
+import { buildImageUrl } from '@/lib/imageUtils';
 
 interface ProjectTeamProps {
   team: TeamMember[];
@@ -20,7 +21,7 @@ export function ProjectTeam({ team }: ProjectTeamProps) {
           <Card key={index} className="text-center">
             <CardContent className="p-6">
               <Avatar className="mx-auto h-16 w-16">
-                <AvatarImage src={member.avatar} alt={`${member.firstName} ${member.lastName}`} />
+                <AvatarImage src={member.avatar ? buildImageUrl(member.avatar, false) : undefined} alt={`${member.firstName} ${member.lastName}`} />
                 <AvatarFallback className="bg-secondary/10 text-secondary">
                   {initials || '?'}
                 </AvatarFallback>

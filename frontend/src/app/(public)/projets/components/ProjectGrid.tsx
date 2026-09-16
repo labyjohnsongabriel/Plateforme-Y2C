@@ -1,4 +1,3 @@
-// app/(public)/projets/components/ProjectGrid.tsx
 'use client';
 
 import { ProjectCard } from './ProjectCard';
@@ -12,8 +11,6 @@ interface ProjectGridProps {
 }
 
 export function ProjectGrid({ projects = [], loading = false, count = 6 }: ProjectGridProps) {
-  const safeProjects = Array.isArray(projects) ? projects : [];
-
   if (loading) {
     return (
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -23,6 +20,9 @@ export function ProjectGrid({ projects = [], loading = false, count = 6 }: Proje
       </div>
     );
   }
+
+  // 🔹 Vérification que projects est bien un tableau
+  const safeProjects = Array.isArray(projects) ? projects : [];
 
   if (safeProjects.length === 0) {
     return (

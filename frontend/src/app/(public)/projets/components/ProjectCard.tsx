@@ -1,4 +1,3 @@
-// app/(public)/projets/components/ProjectCard.tsx
 'use client';
 
 import Link from 'next/link';
@@ -8,6 +7,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Project } from '@/types';
+import { buildImageUrl } from '@/lib/imageUtils';
 
 interface ProjectCardProps {
   project: Project;
@@ -23,18 +23,18 @@ const statusStyles: Record<string, string> = {
 };
 
 export function ProjectCard({ project, index }: ProjectCardProps) {
+  // 🔹 Sécurisation des données
   const {
-    id,
-    title,
-    slug,
-    description,
-    images,
-    year,
-    category,
-    status,
-    isFeatured,
+    title = 'Sans titre',
+    slug = '#',
+    description = 'Aucune description',
+    images = [],
+    year = 'Année inconnue',
+    category = '',
+    status = '',
+    isFeatured = false,
     technologies = [],
-  } = project;
+  } = project || {};
 
   const imageUrl = images?.[0] || null;
   const displayTechs = technologies.slice(0, 3);
@@ -48,21 +48,18 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
       className="h-full"
     >
       <Card className="group h-full overflow-hidden transition-all duration-300 hover:shadow-xl flex flex-col">
-        {/* Image */}
         <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-primary/10 to-secondary/10">
           {imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={imageUrl}
+              src={buildImageUrl(imageUrl, false)}
               alt={title}
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               loading="lazy"
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <span className="text-4xl font-bold text-primary/20">
-                {title.charAt(0).toUpperCase()}
-              </span>
+            <div className="flex h-full items-center justify-center text-4xl font-bold text-primary/20">
+              {title.charAt(0).toUpperCase()}
             </div>
           )}
           {status && (
@@ -77,11 +74,10 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
           )}
         </div>
 
-        {/* Header */}
         <CardHeader>
           <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
             <Calendar className="h-4 w-4" />
-            <span>{year || 'Date inconnue'}</span>
+            <span>{year}</span>
             {category && (
               <>
                 <span>•</span>
@@ -96,10 +92,9 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
           </CardTitle>
         </CardHeader>
 
-        {/* Content */}
         <CardContent className="flex-1">
           <p className="line-clamp-2 text-sm text-muted-foreground">
-            {description || 'Aucune description disponible.'}
+            {description}
           </p>
           {displayTechs.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-1">
@@ -117,7 +112,6 @@ export function ProjectCard({ project, index }: ProjectCardProps) {
           )}
         </CardContent>
 
-        {/* Footer */}
         <CardFooter>
           <Button asChild variant="ghost" className="gap-2 group-hover:gap-3 transition-all">
             <Link href={`/projets/${slug}`}>

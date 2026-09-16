@@ -1,4 +1,3 @@
-// app/(public)/projets/components/ProjectFilters.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Filter, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const CATEGORIES = ['Éducation', 'Santé', 'Technologie', 'Environnement', 'Social', 'Autre'];
 const STATUSES = ['PLANNING', 'IN_PROGRESS', 'COMPLETED', 'ON_HOLD', 'EVALUATING'];
@@ -98,13 +97,7 @@ export function ProjectFilters({ onFilterChange, isLoading = false }: ProjectFil
           disabled={isLoading}
         />
         {hasFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            disabled={isLoading}
-            className="gap-1"
-          >
+          <Button variant="ghost" size="sm" onClick={clearFilters} disabled={isLoading} className="gap-1">
             <X className="h-4 w-4" />
             Réinitialiser
           </Button>
