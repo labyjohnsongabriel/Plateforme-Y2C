@@ -17,10 +17,14 @@ export const ROUTES = {
   FORGOT_PASSWORD: '/mot-de-passe-oublie',
   RESET_PASSWORD: '/reinitialiser-mot-de-passe',
 
+    ADMIN_TEAM: '/admin/team',
+  ADMIN_TEAM_STATS: '/admin/team/stats',
+
   // Admin routes
   ADMIN: '/admin',
   ADMIN_DASHBOARD: '/admin/dashboard',
   ADMIN_FORMATIONS: '/admin/formations',
+
   ADMIN_FORMATION_NEW: '/admin/formations/nouveau',
   ADMIN_FORMATION_EDIT: (id: string) => `/admin/formations/${id}`,
   ADMIN_REGISTRATIONS: '/admin/inscriptions',
