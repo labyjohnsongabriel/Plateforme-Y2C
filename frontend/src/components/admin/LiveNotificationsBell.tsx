@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useNotificationStore } from '@/store/notification.store';
 import { useSocket } from '@/contexts/SocketContext';
+import { showNotificationToast } from '@/lib/notification-utils';
 
 interface Notification {
   id: string;
@@ -34,28 +35,53 @@ export function LiveNotificationsBell() {
     useNotificationStore();
   const { socket, isConnected } = useSocket();
 
+  // ─── Écoute des notifications Socket ──────────────────────
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !isConnected) return;
 
     const handleNewNotification = (data: Notification) => {
       addNotification(data);
+      // Animation de la cloche
       setIsPlaying(true);
       setTimeout(() => setIsPlaying(false), 3000);
+      // Toast professionnel
+      showNotificationToast({
+        title: data.title || 'Nouvelle notification',
+        message: data.message,
+        link: data.link,
+        icon: '🔔',
+      });
     };
 
     socket.on('notification:receive', handleNewNotification);
+    socket.on('new-notification', handleNewNotification);
+    socket.on('notification:count', (data: { unread?: number; count?: number }) => {
+      const count = data.unread ?? data.count;
+      if (typeof count === 'number') {
+        useNotificationStore.getState().setUnreadCount(count);
+      }
+    });
 
     return () => {
       socket.off('notification:receive', handleNewNotification);
+      socket.off('new-notification', handleNewNotification);
+      socket.off('notification:count');
     };
-  }, [socket, addNotification]);
+  }, [socket, isConnected, addNotification]);
 
+  // ─── Handlers ──────────────────────────────────────────────
   const handleMarkAsRead = (id: string) => {
     markAsRead(id);
   };
 
   const handleMarkAllAsRead = () => {
     markAllAsRead();
+  };
+
+  const containerVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 0.8 },
   };
 
   return (
@@ -132,13 +158,15 @@ export function LiveNotificationsBell() {
                   onClick={() => {
                     if (!notif.isRead) handleMarkAsRead(notif.id);
                     if (notif.link) {
-                      // Navigation vers le lien
+                      window.location.href = notif.link;
                     }
                   }}
                 >
                   <div className="flex-1 space-y-1">
                     <p className="text-sm font-medium">{notif.title}</p>
-                    <p className="text-xs text-muted-foreground">{notif.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {typeof notif.message === 'string' ? notif.message : 'Nouvelle notification'}
+                    </p>
                     <p className="text-[10px] text-muted-foreground">
                       {new Date(notif.createdAt).toLocaleDateString('fr-FR', {
                         hour: '2-digit',
@@ -162,7 +190,8 @@ export function LiveNotificationsBell() {
               size="sm"
               className="w-full text-xs"
               onClick={() => {
-                // Voir toutes les notifications
+                // Rediriger vers la page des notifications
+                window.location.href = '/admin/notifications';
               }}
             >
               Voir toutes les notifications

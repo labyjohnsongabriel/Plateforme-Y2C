@@ -1,9 +1,9 @@
 // src/components/admin/NotificationsPanel.tsx
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Check, Clock } from 'lucide-react';
+import { Bell, Check, Clock, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,11 +14,24 @@ import { dashboard } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useSocket } from '@/contexts/SocketContext';
+import { showNotificationToast } from '@/lib/notification-utils';
 
 export function NotificationsPanel() {
-  const { notifications, unreadCount, markAsRead, markAllAsRead, setNotifications, isLoading, setLoading } =
-    useNotificationStore();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    setNotifications,
+    addNotification,
+    isLoading,
+    setLoading,
+  } = useNotificationStore();
 
+  const { socket, isConnected } = useSocket();
+
+  // ─── Chargement initial ──────────────────────────────────
   useEffect(() => {
     const fetchNotifications = async () => {
       setLoading(true);
@@ -36,6 +49,35 @@ export function NotificationsPanel() {
     fetchNotifications();
   }, [setNotifications, setLoading]);
 
+  // ─── Écoute des notifications en temps réel ──────────────
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleNewNotification = (data: any) => {
+      addNotification(data);
+      // Toast professionnel
+      showNotificationToast({
+        title: data.title || 'Nouvelle notification',
+        message: data.message,
+        link: data.link,
+        icon: '🔔',
+      });
+    };
+
+    const handleUnreadCount = (data: { count: number }) => {
+      // Le store gère déjà le compteur via addNotification
+    };
+
+    socket.on('notification:receive', handleNewNotification);
+    socket.on('notification:count', handleUnreadCount);
+
+    return () => {
+      socket.off('notification:receive', handleNewNotification);
+      socket.off('notification:count', handleUnreadCount);
+    };
+  }, [socket, isConnected, addNotification]);
+
+  // ─── Handlers ──────────────────────────────────────────────
   const handleMarkAsRead = async (id: string) => {
     try {
       await dashboard.markNotificationAsRead(id);
@@ -83,6 +125,11 @@ export function NotificationsPanel() {
               {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
+          {!isConnected && (
+            <Badge variant="outline" className="ml-1 h-5 text-[10px] text-muted-foreground">
+              Hors ligne
+            </Badge>
+          )}
         </CardTitle>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs" onClick={handleMarkAllAsRead}>
@@ -109,7 +156,7 @@ export function NotificationsPanel() {
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.2 }}
                     className={cn(
-                      'group flex items-start gap-3 rounded-lg p-3 transition-colors',
+                      'group flex items-start gap-3 rounded-lg p-3 transition-colors cursor-pointer',
                       !notif.isRead ? 'bg-secondary/5 hover:bg-secondary/10' : 'hover:bg-muted/50'
                     )}
                     onClick={() => {
@@ -122,8 +169,9 @@ export function NotificationsPanel() {
                         <p className="text-sm font-medium leading-none">{notif.title}</p>
                         {!notif.isRead && <span className="h-2 w-2 rounded-full bg-destructive" />}
                       </div>
-                      {/* ✅ On affiche le message, pas un objet */}
-                      <p className="text-xs text-muted-foreground line-clamp-2">{notif.message}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {typeof notif.message === 'string' ? notif.message : 'Nouvelle notification'}
+                      </p>
                       <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
                         <Clock className="h-3 w-3" />
                         <span>{formatDate(notif.createdAt)}</span>
