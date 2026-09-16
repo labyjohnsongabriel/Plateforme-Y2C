@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, MapPin, Users, Clock, Loader2 } from 'lucide-react';
+import { Calendar, MapPin, Users, Clock, Loader2, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate, formatTime, cn } from '@/lib/utils';
 import { y2c } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { EventRegistrationModal } from './EventRegistrationModal';
 
 type Event = {
   id: string;
@@ -54,17 +56,23 @@ export function EventCalendar() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchEvents = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 500));
       try {
         const response = await y2c.getEvents();
-        const rawData = response?.data?.data || response?.data || [];
+        let rawData = response?.data?.data || response?.data || [];
+        if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+          rawData = rawData.data || [];
+        }
         const normalized = Array.isArray(rawData) ? rawData : [];
         setEvents(normalized);
         setError(null);
       } catch (error: any) {
-        console.error('Erreur chargement événements:', error);
+        console.error('❌ Erreur chargement événements:', error);
         const msg = error?.response?.data?.message || 'Impossible de charger les événements';
         setError(msg);
         toast.error(msg);
@@ -75,6 +83,15 @@ export function EventCalendar() {
     };
     fetchEvents();
   }, []);
+
+  const handleRegisterClick = (event: Event) => {
+    setSelectedEvent(event);
+    setIsModalOpen(true);
+  };
+
+  const handleRegistrationSuccess = () => {
+    // Optionnel : rafraîchir les données ou afficher un message
+  };
 
   if (isLoading) {
     return (
@@ -156,79 +173,99 @@ export function EventCalendar() {
   const displayEvents = safeEvents.slice(0, 5);
 
   return (
-    <Card className="border-0 shadow-2xl bg-gradient-to-br from-background to-primary/5 overflow-hidden">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-ubuntu text-lg flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-secondary" />
-          Événements à venir
-          <span className="ml-auto text-xs font-normal text-muted-foreground">
-            {safeEvents.length} événement{safeEvents.length > 1 ? 's' : ''}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <AnimatePresence>
-          {displayEvents.map((event, index) => (
-            <motion.div
-              key={event.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.06 }}
-              className="group relative rounded-lg border border-border/50 p-4 transition-all hover:border-secondary/30 hover:shadow-md"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                <div className="space-y-1 flex-1 min-w-0">
-                  <h4 className="font-medium text-foreground group-hover:text-secondary transition-colors truncate">
-                    {event.title}
-                  </h4>
-                  <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(event.startDate)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      {formatTime(event.startDate)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {event.location}
-                    </span>
+    <>
+      <Card className="border-0 shadow-2xl bg-gradient-to-br from-background to-primary/5 overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="font-ubuntu text-lg flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-secondary" />
+            Événements à venir
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              {safeEvents.length} événement{safeEvents.length > 1 ? 's' : ''}
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <AnimatePresence>
+            {displayEvents.map((event, index) => (
+              <motion.div
+                key={event.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.06 }}
+                className="group relative rounded-lg border border-border/50 p-4 transition-all hover:border-secondary/30 hover:shadow-md"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <h4 className="font-medium text-foreground group-hover:text-secondary transition-colors truncate">
+                      {event.title}
+                    </h4>
+                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {formatDate(event.startDate)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {formatTime(event.startDate)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3.5 w-3.5" />
+                        {event.location}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge
+                      className={cn(
+                        'text-[10px] uppercase font-medium',
+                        eventTypeColors[event.eventType] || eventTypeColors.OTHER
+                      )}
+                    >
+                      {getTypeLabel(event.eventType)}
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs h-8"
+                      onClick={() => handleRegisterClick(event)}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      S'inscrire
+                    </Button>
                   </div>
                 </div>
-                <Badge
-                  className={cn(
-                    'text-[10px] uppercase font-medium shrink-0',
-                    eventTypeColors[event.eventType] || eventTypeColors.OTHER
-                  )}
-                >
-                  {getTypeLabel(event.eventType)}
-                </Badge>
-              </div>
-              {event.description && (
-                <p className="mt-2 text-sm text-muted-foreground/80 line-clamp-2">
-                  {event.description}
-                </p>
-              )}
-              {event.maxParticipants && (
-                <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
-                  <Users className="h-3 w-3" />
-                  <span>Max {event.maxParticipants} participants</span>
-                </div>
-              )}
-              <div className="absolute -right-2 -top-2 h-10 w-10 rounded-full bg-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+                {event.description && (
+                  <p className="mt-2 text-sm text-muted-foreground/80 line-clamp-2">
+                    {event.description}
+                  </p>
+                )}
+                {event.maxParticipants && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
+                    <Users className="h-3 w-3" />
+                    <span>Max {event.maxParticipants} participants</span>
+                  </div>
+                )}
+                <div className="absolute -right-2 -top-2 h-10 w-10 rounded-full bg-secondary/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
-        {safeEvents.length > 5 && (
-          <div className="text-center pt-1">
-            <span className="text-xs text-muted-foreground/60">
-              + {safeEvents.length - 5} autre{safeEvents.length - 5 > 1 ? 's' : ''} événement{safeEvents.length - 5 > 1 ? 's' : ''}
-            </span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {safeEvents.length > 5 && (
+            <div className="text-center pt-1">
+              <span className="text-xs text-muted-foreground/60">
+                + {safeEvents.length - 5} autre{safeEvents.length - 5 > 1 ? 's' : ''} événement{safeEvents.length - 5 > 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <EventRegistrationModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        event={selectedEvent}
+        onSuccess={handleRegistrationSuccess}
+      />
+    </>
   );
 }

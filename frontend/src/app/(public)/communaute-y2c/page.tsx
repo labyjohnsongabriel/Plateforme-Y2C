@@ -1,3 +1,4 @@
+// src/app/(public)/communaute-y2c/page.tsx
 'use client';
 
 import { motion } from 'framer-motion';
@@ -8,17 +9,18 @@ import { BenefitsSection } from './components/BenefitsSection';
 import { MembershipForm } from './components/MembershipForm';
 import { EventCalendar } from './components/EventCalendar';
 
+// ✅ Les métadonnées ont été déplacées dans layout.tsx
 export default function Y2CPage() {
   return (
     <PageTransition>
-      <div className="container-custom py-12 relative">
+      <div className="container mx-auto px-4 py-12 relative">
         {/* Décoration de fond */}
         <div className="absolute inset-0 -z-10 overflow-hidden">
           <div className="absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full bg-primary/5 blur-3xl" />
           <div className="absolute -bottom-40 -left-40 h-[500px] w-[500px] rounded-full bg-secondary/5 blur-3xl" />
         </div>
 
-        {/* En-tête */}
+        {/* ─── En-tête ────────────────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -38,16 +40,24 @@ export default function Y2CPage() {
           </div>
         </motion.div>
 
-        {/* Présentation avec Lottie */}
-        <CommunityPresentation />
+        {/* ─── Présentation avec image ────────────────────── */}
+        <CommunityPresentation
+          imageSrc="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=1600&q=80"
+          imageAlt="Communauté Youth Computing"
+          title="Rejoignez la communauté Y2C"
+          subtitle="Une communauté de passionnés"
+          description="Échangez, apprenez et innovez ensemble"
+          ctaText="Adhérer"
+          ctaLink="/communaute-y2c"
+        />
 
-        {/* Activités */}
+        {/* ─── Activités ────────────────────────────────────── */}
         <ActivitiesGrid />
 
-        {/* Avantages */}
+        {/* ─── Avantages ────────────────────────────────────── */}
         <BenefitsSection />
 
-        {/* Formulaire et calendrier */}
+        {/* ─── Formulaire et calendrier ────────────────────── */}
         <div className="mt-16 grid gap-12 lg:grid-cols-2">
           <MembershipForm />
           <EventCalendar />
