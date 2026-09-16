@@ -1,10 +1,17 @@
+// src/components/layout/Navbar.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu,
   X,
@@ -17,6 +24,14 @@ import {
   Shield,
   HelpCircle,
   CreditCard,
+  CheckCheck,
+  Inbox,
+  Info,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/shared/ThemeToggle';
@@ -51,8 +66,58 @@ import { useNotificationStore } from '@/store/notification.store';
 import { useSocket } from '@/contexts/SocketContext';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
-import { showNotificationToast } from '../../lib/notification-utils';
+import { showNotificationToast } from '@/lib/notification-utils';
 
+// ============================================================
+// CONFIG
+// ============================================================
+const NOTIF_TYPES: Record<
+  string,
+  {
+    icon: React.ComponentType<{ className?: string }>;
+    color: string;
+    dot: string;
+  }
+> = {
+  info: {
+    icon: Info,
+    color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    dot: 'bg-blue-500',
+  },
+  success: {
+    icon: CheckCircle2,
+    color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    dot: 'bg-emerald-500',
+  },
+  warning: {
+    icon: AlertTriangle,
+    color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    dot: 'bg-amber-500',
+  },
+  error: {
+    icon: XCircle,
+    color: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    dot: 'bg-red-500',
+  },
+};
+
+// ============================================================
+// HELPER
+// ============================================================
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const obj = value as any;
+    if (Array.isArray(obj.data)) return obj.data;
+    if (Array.isArray(obj.notifications)) return obj.notifications;
+    if (Array.isArray(obj.items)) return obj.items;
+  }
+  return [];
+}
+
+// ============================================================
+// COMPOSANT
+// ============================================================
 export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -73,18 +138,25 @@ export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [notifError, setNotifError] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
 
-  // --- Navigation items ---
-  const baseNavItems = useMemo(() => {
-    if (isAuthenticated) {
-      return Array.isArray(publicNavigation) ? publicNavigation : [];
-    }
-    return Array.isArray(guestNavigation) ? guestNavigation : [];
-  }, [isAuthenticated]);
+  // ✅ Toujours un tableau
+  const safeNotifications = useMemo(
+    () => asArray<any>(notifications),
+    [notifications]
+  );
 
+  // ─── Navigation ───
   const navItems = useMemo(() => {
-    const items = [...baseNavItems];
+    const base = isAuthenticated
+      ? Array.isArray(publicNavigation)
+        ? publicNavigation
+        : []
+      : Array.isArray(guestNavigation)
+        ? guestNavigation
+        : [];
+
+    const items = [...base];
     if (!items.some((item) => item.href === '/recrutements')) {
       items.push({ href: '/recrutements', label: 'Recrutement' });
     }
@@ -92,7 +164,7 @@ export function Navbar() {
       items.push({ href: '/partenaires', label: 'Partenaires' });
     }
     return items;
-  }, [baseNavItems]);
+  }, [isAuthenticated]);
 
   const adminItems = useMemo(() => {
     if (isAuthenticated && user) {
@@ -101,26 +173,31 @@ export function Navbar() {
     return [];
   }, [isAuthenticated, user]);
 
-  // --- Chargement des notifications (URL corrigée) ---
+  // ─── Chargement notifications ───
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) {
       setIsLoading(false);
       return;
     }
+
     try {
       setIsLoading(true);
-      setNotifError(false);
-      // ✅ Utilisation de /notifications/my-notifications
+      setNotifError(null);
+
       const response = await api.get('/notifications/my-notifications');
-      const data = response.data?.data || response.data || [];
-      const notifs = Array.isArray(data) ? data : [];
+      const data = response.data?.data ?? response.data;
+      const notifs = asArray<any>(data);
+
       clearNotifications();
-      notifs.forEach((notif: any) => addNotification(notif));
+      notifs.forEach((n: any) => addNotification(n));
+
       const unread = notifs.filter((n: any) => !n.isRead).length;
       setUnreadCount(unread);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erreur chargement notifications:', error);
-      setNotifError(true);
+      setNotifError(
+        error?.response?.data?.message || 'Erreur de chargement'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -130,52 +207,61 @@ export function Navbar() {
     fetchNotifications();
   }, [fetchNotifications]);
 
-  // --- Socket.IO ---
+  // ─── Socket (deps stables) ───
+  const notificationsRef = useRef(safeNotifications);
+  useEffect(() => {
+    notificationsRef.current = safeNotifications;
+  }, [safeNotifications]);
+
   useEffect(() => {
     if (!socket || !isConnected) return;
 
-    const handleNewNotification = (data: any) => {
-      const exists = notifications.some((n) => n.id === data.id);
-      if (!exists) {
-        addNotification(data);
-        showNotificationToast({
-          title: data.title || 'Nouvelle notification',
-          message: data.message,
-          link: data.link,
-          icon: '🔔',
-        });
-      }
+    const handleNew = (data: any) => {
+      if (!data?.id) return;
+      const exists = notificationsRef.current.some((n) => n.id === data.id);
+      if (exists) return;
+
+      addNotification(data);
+      showNotificationToast({
+        title: data.title || 'Nouvelle notification',
+        message: data.message,
+        link: data.link,
+        icon: '🔔',
+      });
     };
 
-    const handleUnreadCount = (data: { count: number }) => {
-      setUnreadCount(data.count);
+    const handleCount = (data: { count: number }) => {
+      if (typeof data?.count === 'number') setUnreadCount(data.count);
     };
 
-    socket.on('notification:receive', handleNewNotification);
-    socket.on('notification:count', handleUnreadCount);
+    socket.on('notification:receive', handleNew);
+    socket.on('notification:count', handleCount);
 
     return () => {
-      socket.off('notification:receive', handleNewNotification);
-      socket.off('notification:count', handleUnreadCount);
+      socket.off('notification:receive', handleNew);
+      socket.off('notification:count', handleCount);
     };
-  }, [socket, isConnected, addNotification, setUnreadCount, notifications]);
+  }, [socket, isConnected, addNotification, setUnreadCount]);
 
-  // --- Scroll ---
+  // ─── Scroll ───
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setIsScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // --- Actions ---
-  const handleMarkAsRead = useCallback(async (id: string) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      markAsRead(id);
-    } catch (error) {
-      console.error('Erreur marquage notification:', error);
-    }
-  }, [markAsRead]);
+  // ─── Actions ───
+  const handleMarkAsRead = useCallback(
+    async (id: string) => {
+      try {
+        await api.put(`/notifications/${id}/read`);
+        markAsRead(id);
+      } catch (error) {
+        console.error('Erreur marquage:', error);
+      }
+    },
+    [markAsRead]
+  );
 
   const handleMarkAllAsRead = useCallback(async () => {
     try {
@@ -183,7 +269,7 @@ export function Navbar() {
       markAllAsRead();
       toast.success('Toutes les notifications ont été marquées comme lues');
     } catch (error) {
-      console.error('Erreur marquage toutes notifications:', error);
+      console.error('Erreur:', error);
       toast.error('Erreur lors du marquage');
     }
   }, [markAllAsRead]);
@@ -201,35 +287,37 @@ export function Navbar() {
     }
   }, [logout, router, clearNotifications]);
 
-  // --- Utilitaires ---
-  const initials =
-    user?.firstName && user?.lastName
-      ? `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase()
-      : 'U';
+  // ─── Utils ───
+  const initials = useMemo(() => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
+    }
+    return 'U';
+  }, [user?.firstName, user?.lastName]);
 
-  const fullName =
-    user?.firstName && user?.lastName
-      ? `${user.firstName} ${user.lastName}`.trim()
-      : 'Utilisateur';
+  const fullName = useMemo(() => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName} ${user.lastName}`.trim();
+    }
+    return 'Utilisateur';
+  }, [user?.firstName, user?.lastName]);
 
-  const dropdownVariants = {
-    hidden: { opacity: 0, y: -10, scale: 0.95 },
-    visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.2 } },
-  };
-
+  // ═══════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════
   return (
     <>
       <header
         className={cn(
           'fixed top-0 z-50 w-full transition-all duration-500 ease-out',
           isScrolled
-            ? 'bg-background/80 backdrop-blur-xl shadow-lg dark:bg-background/70'
+            ? 'bg-background/80 shadow-lg backdrop-blur-xl dark:bg-background/70'
             : 'bg-transparent'
         )}
       >
         <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
+          {/* ═══════ LOGO ═══════ */}
+          <Link href="/" className="group flex items-center gap-3">
             <motion.div
               whileHover={{ scale: 1.05 }}
               className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20 p-1"
@@ -252,7 +340,7 @@ export function Navbar() {
             </motion.span>
           </Link>
 
-          {/* Navigation desktop */}
+          {/* ═══════ NAV DESKTOP ═══════ */}
           <nav className="hidden items-center gap-1 md:flex">
             {navItems.map((item) => {
               const isActive =
@@ -285,286 +373,423 @@ export function Navbar() {
             {adminItems.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-1 rounded-full px-4 py-2 text-sm font-medium">
+                  <Button
+                    variant="ghost"
+                    className="gap-1 rounded-full px-4 py-2 text-sm font-medium"
+                  >
                     Admin <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64 rounded-2xl border border-border/50 bg-background/95 backdrop-blur-md shadow-xl p-2">
-                  <motion.div variants={dropdownVariants} initial="hidden" animate="visible" exit="hidden">
-                    {adminItems.map((item) => {
-                      if (item.children) {
-                        return (
-                          <DropdownMenuGroup key={item.label}>
-                            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1">
-                              {item.label}
-                            </DropdownMenuLabel>
-                            {item.children.map((child) => (
-                              <DropdownMenuItem
-                                key={child.href}
-                                onClick={() => router.push(child.href)}
-                                className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                              >
-                                {child.icon && <child.icon className="mr-2 h-4 w-4" />}
-                                {child.label}
-                              </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator className="my-1" />
-                          </DropdownMenuGroup>
-                        );
-                      }
+                <DropdownMenuContent className="w-64 rounded-2xl border border-border/50 bg-background/95 p-2 shadow-xl backdrop-blur-md">
+                  {adminItems.map((item) => {
+                    if (item.children) {
                       return (
-                        <DropdownMenuItem
-                          key={item.href}
-                          onClick={() => router.push(item.href)}
-                          className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                        >
-                          {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-                          {item.label}
-                        </DropdownMenuItem>
+                        <DropdownMenuGroup key={item.label}>
+                          <DropdownMenuLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+                            {item.label}
+                          </DropdownMenuLabel>
+                          {item.children.map((child) => (
+                            <DropdownMenuItem
+                              key={child.href}
+                              onClick={() => router.push(child.href)}
+                              className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
+                            >
+                              {child.icon && (
+                                <child.icon className="mr-2 h-4 w-4" />
+                              )}
+                              {child.label}
+                            </DropdownMenuItem>
+                          ))}
+                          <DropdownMenuSeparator className="my-1" />
+                        </DropdownMenuGroup>
                       );
-                    })}
-                  </motion.div>
+                    }
+                    return (
+                      <DropdownMenuItem
+                        key={item.href}
+                        onClick={() => router.push(item.href)}
+                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
+                      >
+                        {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                        {item.label}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </nav>
 
-          {/* Actions droite */}
+          {/* ═══════ ACTIONS DROITE ═══════ */}
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle variant="ghost" size="icon" className="rounded-full" />
 
-            {/* Notifications */}
+            {/* ═══════ NOTIFICATIONS ═══════ */}
             {isAuthenticated && (
-              <Popover open={isNotificationOpen} onOpenChange={setIsNotificationOpen}>
+              <Popover
+                open={isNotificationOpen}
+                onOpenChange={setIsNotificationOpen}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="relative rounded-full"
-                    aria-label="Notifications"
+                    aria-label={`Notifications ${
+                      unreadCount > 0 ? `(${unreadCount} non lues)` : ''
+                    }`}
                   >
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                      <Badge
-                        variant="destructive"
-                        className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full px-1 text-[10px] font-bold animate-pulse"
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground shadow-lg"
                       >
                         {unreadCount > 99 ? '99+' : unreadCount}
-                      </Badge>
+                      </motion.span>
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 rounded-2xl border border-border/50 bg-background/95 p-0 shadow-2xl backdrop-blur-md" align="end">
-                  <motion.div variants={dropdownVariants} initial="hidden" animate="visible" exit="hidden">
-                    <div className="flex items-center justify-between border-b p-3">
-                      <span className="font-semibold">Notifications</span>
+
+                <PopoverContent
+                  className="w-80 overflow-hidden rounded-2xl border-border/60 p-0 shadow-2xl sm:w-96"
+                  align="end"
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold">Notifications</span>
                       {unreadCount > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1 px-2 text-xs"
-                          onClick={handleMarkAllAsRead}
+                        <Badge
+                          variant="destructive"
+                          className="h-5 px-1.5 text-[10px] font-bold"
                         >
-                          Tout marquer lu
-                        </Button>
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </Badge>
                       )}
+                      {/* Statut socket */}
+                      <span
+                        className={cn(
+                          'ml-1 h-2 w-2 rounded-full',
+                          isConnected
+                            ? 'bg-emerald-500 animate-pulse'
+                            : 'bg-gray-400'
+                        )}
+                        title={isConnected ? 'Temps réel' : 'Hors ligne'}
+                      />
                     </div>
+                    {unreadCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={handleMarkAllAsRead}
+                      >
+                        <CheckCheck className="h-3 w-3" />
+                        Tout lire
+                      </Button>
+                    )}
+                  </div>
 
-                    <ScrollArea className="max-h-[300px]">
-                      {isLoading ? (
-                        <div className="space-y-2 p-4">
-                          {Array.from({ length: 4 }).map((_, i) => (
-                            <Skeleton key={i} className="h-12 w-full" />
-                          ))}
-                        </div>
-                      ) : notifError ? (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                          Impossible de charger les notifications
-                        </div>
-                      ) : notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-8 text-center">
-                          <Bell className="h-8 w-8 text-muted-foreground" />
-                          <p className="mt-2 text-sm text-muted-foreground">Aucune notification</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-1 p-1">
-                          {notifications.slice(0, 20).map((notif) => (
-                            <div
-                              key={notif.id}
-                              className={cn(
-                                'flex cursor-pointer items-start gap-3 rounded-lg p-3 transition-colors hover:bg-muted/50',
-                                !notif.isRead && 'bg-secondary/5'
-                              )}
-                              onClick={() => {
-                                if (!notif.isRead) handleMarkAsRead(notif.id);
-                                if (notif.link) {
-                                  router.push(notif.link);
-                                  setIsNotificationOpen(false);
-                                }
-                              }}
-                            >
-                              <div className="flex-1 space-y-1">
-                                <p className="text-sm font-medium">{notif.title}</p>
-                                <p className="text-xs text-muted-foreground line-clamp-2">
-                                  {notif.message}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {new Date(notif.createdAt).toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'short',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </p>
-                              </div>
-                              {!notif.isRead && <span className="mt-1 h-2 w-2 rounded-full bg-secondary" />}
+                  {/* Body */}
+                  <ScrollArea className="max-h-[400px]">
+                    {isLoading ? (
+                      <div className="space-y-3 p-4">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <Skeleton className="h-9 w-9 rounded-full" />
+                            <div className="flex-1 space-y-1.5">
+                              <Skeleton className="h-3.5 w-3/4" />
+                              <Skeleton className="h-3 w-1/2" />
                             </div>
-                          ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : notifError ? (
+                      <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+                        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/10">
+                          <XCircle className="h-6 w-6 text-red-500" />
                         </div>
-                      )}
-                    </ScrollArea>
-
-                    {notifications.length > 0 && (
-                      <div className="border-t p-2 text-center">
+                        <p className="text-sm font-medium">Erreur de chargement</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {notifError}
+                        </p>
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="w-full text-xs"
-                          onClick={() => {
-                            setIsNotificationOpen(false);
-                            router.push('/admin/notifications');
-                          }}
+                          className="mt-3"
+                          onClick={() => fetchNotifications()}
                         >
-                          Voir toutes les notifications
+                          Réessayer
                         </Button>
                       </div>
+                    ) : safeNotifications.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
+                        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 ring-4 ring-emerald-500/5">
+                          <CheckCheck className="h-7 w-7 text-emerald-500" />
+                        </div>
+                        <p className="text-sm font-semibold text-foreground">
+                          Aucune notification
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Vous êtes à jour !
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/40">
+                        <AnimatePresence initial={false}>
+                          {safeNotifications.slice(0, 20).map((notif, i) => {
+                            const type = notif.type || 'info';
+                            const typeConfig =
+                              NOTIF_TYPES[type] || NOTIF_TYPES.info;
+                            const Icon = typeConfig.icon;
+
+                            return (
+                              <motion.div
+                                key={notif.id}
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.02 }}
+                                className={cn(
+                                  'group relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors',
+                                  !notif.isRead
+                                    ? 'bg-secondary/5 hover:bg-secondary/10'
+                                    : 'hover:bg-muted/40'
+                                )}
+                                onClick={() => {
+                                  if (!notif.isRead)
+                                    handleMarkAsRead(notif.id);
+                                  if (notif.link) {
+                                    router.push(notif.link);
+                                    setIsNotificationOpen(false);
+                                  }
+                                }}
+                              >
+                                {!notif.isRead && (
+                                  <span
+                                    className={cn(
+                                      'absolute bottom-2 left-0 top-2 w-0.5 rounded-r-full',
+                                      typeConfig.dot
+                                    )}
+                                  />
+                                )}
+
+                                <div
+                                  className={cn(
+                                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-full ring-2 ring-background',
+                                    typeConfig.color
+                                  )}
+                                >
+                                  <Icon className="h-4 w-4" />
+                                </div>
+
+                                <div className="min-w-0 flex-1">
+                                  <p
+                                    className={cn(
+                                      'truncate text-sm leading-tight',
+                                      !notif.isRead
+                                        ? 'font-semibold text-foreground'
+                                        : 'font-medium text-foreground/90'
+                                    )}
+                                  >
+                                    {notif.title}
+                                  </p>
+                                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                                    {notif.message}
+                                  </p>
+                                  <p className="mt-1 text-[10px] font-medium text-muted-foreground/70">
+                                    {new Date(notif.createdAt).toLocaleString(
+                                      'fr-FR',
+                                      {
+                                        day: 'numeric',
+                                        month: 'short',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      }
+                                    )}
+                                  </p>
+                                </div>
+
+                                {!notif.isRead && (
+                                  <span
+                                    className={cn(
+                                      'mt-1 h-2 w-2 shrink-0 rounded-full ring-2 ring-background',
+                                      typeConfig.dot
+                                    )}
+                                  />
+                                )}
+                              </motion.div>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </div>
                     )}
-                  </motion.div>
+                  </ScrollArea>
+
+                  {/* Footer */}
+                  {safeNotifications.length > 0 && (
+                    <div className="border-t border-border/50 bg-muted/20 p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-center gap-2 text-xs"
+                        onClick={() => {
+                          setIsNotificationOpen(false);
+                          router.push('/admin/notifications');
+                        }}
+                      >
+                        <Inbox className="h-3 w-3" />
+                        Voir toutes les notifications
+                      </Button>
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
             )}
 
-            {/* Profil utilisateur */}
+            {/* ═══════ PROFIL ═══════ */}
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-9 gap-2 rounded-full px-2 hover:bg-secondary/10">
+                  <Button
+                    variant="ghost"
+                    className="relative h-9 gap-2 rounded-full px-2 hover:bg-secondary/10"
+                  >
                     <Avatar className="h-8 w-8 ring-2 ring-primary/20 ring-offset-2 ring-offset-background">
-                      <AvatarImage src={user.avatar ? buildImageUrl(user.avatar, false) : undefined} alt={fullName} />
+                      <AvatarImage
+                        src={
+                          user.avatar ? buildImageUrl(user.avatar, false) : undefined
+                        }
+                        alt={fullName}
+                      />
                       <AvatarFallback className="bg-gradient-to-br from-primary/20 to-secondary/20 text-xs font-bold text-secondary">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="hidden text-sm font-medium lg:inline-block">{user.firstName}</span>
+                    <span className="hidden text-sm font-medium lg:inline-block">
+                      {user.firstName}
+                    </span>
                     <ChevronDown className="hidden h-4 w-4 text-muted-foreground lg:block" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 rounded-2xl border border-border/50 bg-background/95 p-2 shadow-2xl backdrop-blur-md">
-                  <motion.div variants={dropdownVariants} initial="hidden" animate="visible" exit="hidden">
-                    <DropdownMenuLabel className="px-2 py-1.5">
-                      <div className="flex flex-col space-y-1">
-                        <p className="font-medium">{fullName}</p>
-                        <p className="text-xs text-muted-foreground">{user.email}</p>
-                        <Badge variant="secondary" className="mt-1 w-fit text-[10px] uppercase">
-                          {user.role}
-                        </Badge>
-                      </div>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
 
-                    <DropdownMenuGroup>
-                      {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
-                        <DropdownMenuItem
-                          onClick={() => router.push('/admin/dashboard')}
-                          className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                        >
-                          <LayoutDashboard className="mr-2 h-4 w-4" />
-                          Tableau de bord
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => router.push('/profile')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
+                <DropdownMenuContent
+                  align="end"
+                  className="w-64 rounded-2xl border border-border/50 bg-background/95 p-2 shadow-2xl backdrop-blur-md"
+                >
+                  <DropdownMenuLabel className="px-2 py-1.5">
+                    <div className="flex flex-col space-y-1">
+                      <p className="font-medium">{fullName}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                      <Badge
+                        variant="secondary"
+                        className="mt-1 w-fit text-[10px] uppercase"
                       >
-                        <UserCircle className="mr-2 h-4 w-4" />
-                        Mon profil
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push('/paiements')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                      >
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Mes paiements
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push('/notifications')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                      >
-                        <Bell className="mr-2 h-4 w-4" />
-                        Notifications
-                        {unreadCount > 0 && (
-                          <Badge className="ml-auto text-[10px]" variant="secondary">
-                            {unreadCount}
-                          </Badge>
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
+                        {user.role}
+                      </Badge>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
 
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuGroup>
+                  <DropdownMenuGroup>
+                    {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
                       <DropdownMenuItem
-                        onClick={() => router.push('/parametres')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
+                        onClick={() => router.push('/admin/dashboard')}
+                        className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
                       >
-                        <Settings className="mr-2 h-4 w-4" />
-                        Paramètres
+                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        Tableau de bord
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push('/security')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                      >
-                        <Shield className="mr-2 h-4 w-4" />
-                        Sécurité
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => router.push('/aide')}
-                        className="cursor-pointer rounded-lg px-3 py-2 transition-colors hover:bg-secondary/10"
-                      >
-                        <HelpCircle className="mr-2 h-4 w-4" />
-                        Aide
-                      </DropdownMenuItem>
-                    </DropdownMenuGroup>
-
-                    <DropdownMenuSeparator />
-
+                    )}
                     <DropdownMenuItem
-                      onClick={handleLogout}
-                      className="cursor-pointer rounded-lg px-3 py-2 text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => router.push('/profile')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Déconnexion
+                      <UserCircle className="mr-2 h-4 w-4" />
+                      Mon profil
                     </DropdownMenuItem>
-                  </motion.div>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/paiements')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Mes paiements
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/notifications')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
+                    >
+                      <Bell className="mr-2 h-4 w-4" />
+                      Notifications
+                      {unreadCount > 0 && (
+                        <Badge className="ml-auto text-[10px]" variant="secondary">
+                          {unreadCount}
+                        </Badge>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/parametres')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      Paramètres
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/security')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Sécurité
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => router.push('/aide')}
+                      className="cursor-pointer rounded-lg px-3 py-2 hover:bg-secondary/10"
+                    >
+                      <HelpCircle className="mr-2 h-4 w-4" />
+                      Aide
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+
+                  <DropdownMenuSeparator />
+
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="cursor-pointer rounded-lg px-3 py-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Déconnexion
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <div className="hidden items-center gap-3 md:flex">
-                <Button asChild variant="ghost" size="sm" className="rounded-full px-4">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full px-4"
+                >
                   <Link href="/connexion">Connexion</Link>
                 </Button>
                 <Button
                   asChild
                   variant="default"
                   size="sm"
-                  className="rounded-full bg-gradient-to-r from-primary to-secondary text-white shadow-md hover:shadow-lg transition-all px-5"
+                  className="rounded-full bg-gradient-to-r from-primary to-secondary px-5 text-white shadow-md transition-all hover:shadow-lg"
                 >
                   <Link href="/inscription">S'inscrire</Link>
                 </Button>
               </div>
             )}
 
-            {/* Mobile menu button */}
+            {/* Bouton mobile */}
             <Button
               variant="ghost"
               size="icon"
@@ -572,7 +797,11 @@ export function Navbar() {
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Menu"
             >
-              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {isMobileMenuOpen ? (
+                <X className="h-5 w-5" />
+              ) : (
+                <Menu className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>
