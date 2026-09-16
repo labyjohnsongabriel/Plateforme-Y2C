@@ -11,9 +11,8 @@ export class ArticleController extends BaseController {
     this.articleService = new ArticleService();
   }
 
-  /**
-   * Récupère tous les articles (avec pagination)
-   */
+  // ─── Récupération des articles ──────────────────────────
+
   getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const page = parseInt(req.query.page as string, 10) || 1;
@@ -38,24 +37,17 @@ export class ArticleController extends BaseController {
         result = await this.articleService.findAllPaginated(page, limit);
       }
 
-      // On renvoie un objet avec data et pagination dans le body
       this.sendSuccess(res, result);
     } catch (error) {
       this.handleError(next, error);
     }
   };
 
-  /**
-   * Récupère les articles publiés (paginés)
-   */
   getPublished = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 10;
-
       const result = await this.articleService.getPublishedArticlesPaginated(page, limit);
-
-      // On renvoie un objet avec data et pagination
       this.sendSuccess(res, result);
     } catch (error) {
       this.handleError(next, error);
@@ -66,11 +58,9 @@ export class ArticleController extends BaseController {
     try {
       const { slug } = req.params;
       const article = await this.articleService.getBySlug(slug);
-
       if (!article) {
         throw new Error('Article not found');
       }
-
       await this.articleService.incrementViews(article.id);
       this.sendSuccess(res, article);
     } catch (error) {
@@ -87,6 +77,8 @@ export class ArticleController extends BaseController {
       this.handleError(next, error);
     }
   };
+
+  // ─── Création, mise à jour, suppression ──────────────────
 
   create = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -121,6 +113,8 @@ export class ArticleController extends BaseController {
     }
   };
 
+  // ─── Publication / dépublier ─────────────────────────────
+
   publish = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -141,6 +135,8 @@ export class ArticleController extends BaseController {
     }
   };
 
+  // ─── Statistiques et vues ────────────────────────────────
+
   getStats = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const stats = await this.articleService.getStats();
@@ -160,8 +156,9 @@ export class ArticleController extends BaseController {
     }
   };
 
-  // ============ COMMENTAIRES ============
+  // ─── Gestion des commentaires ─────────────────────────────
 
+  // Créer un commentaire (public)
   createComment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const comment = await this.articleService.createComment(req.body);
@@ -171,6 +168,39 @@ export class ArticleController extends BaseController {
     }
   };
 
+  // Récupérer les commentaires approuvés d'un article (public)
+  getArticleComments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { articleId } = req.params;
+      const comments = await this.articleService.getArticleComments(articleId);
+      this.sendSuccess(res, comments);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // Récupérer TOUS les commentaires d'un article (admin, y compris non approuvés)
+  getAllCommentsByArticle = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { articleId } = req.params;
+      const comments = await this.articleService.getAllCommentsByArticle(articleId);
+      this.sendSuccess(res, comments);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // Récupérer les commentaires en attente (admin)
+  getUnapprovedComments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const comments = await this.articleService.getUnapprovedComments();
+      this.sendSuccess(res, comments);
+    } catch (error) {
+      this.handleError(next, error);
+    }
+  };
+
+  // Approuver un commentaire
   approveComment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -181,6 +211,7 @@ export class ArticleController extends BaseController {
     }
   };
 
+  // Supprimer un commentaire
   deleteComment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
@@ -190,15 +221,4 @@ export class ArticleController extends BaseController {
       this.handleError(next, error);
     }
   };
-
-  getArticleComments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { articleId } = req.params;
-      const comments = await this.articleService.getArticleComments(articleId);
-      this.sendSuccess(res, comments);
-    } catch (error) {
-      this.handleError(next, error);
-    }
-  };
 }
-
