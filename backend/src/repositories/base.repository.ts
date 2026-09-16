@@ -88,7 +88,7 @@ export class BaseRepository<T, WhereInput = any, CreateInput = any, UpdateInput 
     });
   }
 
-  // ✅ findMany avec skip/take pour la pagination (appel direct)
+  // findMany avec skip/take pour la pagination
   async findMany(params?: {
     where?: WhereInput;
     skip?: number;
@@ -102,12 +102,15 @@ export class BaseRepository<T, WhereInput = any, CreateInput = any, UpdateInput 
     });
   }
 
-  // ✅ findAll = alias de findMany
+  // alias findAll
   async findAll(params?: any): Promise<T[]> {
     return this.findMany(params);
   }
 
-  // ✅ findPaginated – méthode de pagination complète avec métadonnées
+  // ❌ LA PREMIÈRE VERSION DE softDelete A ÉTÉ SUPPRIMÉE ICI
+  // (il n'y a plus de doublon)
+
+  // findPaginated – pagination complète avec métadonnées
   async findPaginated(params: {
     page?: number;
     limit?: number;
@@ -197,6 +200,7 @@ export class BaseRepository<T, WhereInput = any, CreateInput = any, UpdateInput 
     return count > 0;
   }
 
+  // ✅ UNIQUE VERSION DE softDelete (avec champ personnalisable)
   async softDelete(id: string, field: string = 'deletedAt'): Promise<T> {
     return this.execute(async () => {
       return await this.model.update({
