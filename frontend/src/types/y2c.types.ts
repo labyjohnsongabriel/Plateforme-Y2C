@@ -10,6 +10,14 @@ export enum Y2CMemberStatus {
   PENDING = 'PENDING',
 }
 
+export enum Y2CPaymentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  FAILED = 'FAILED',
+  REFUNDED = 'REFUNDED',
+}
+
+
 export enum Y2CEventType {
   TRAINING = 'TRAINING',
   CONFERENCE = 'CONFERENCE',
@@ -40,6 +48,20 @@ export interface Y2CMember {
   expiresAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Y2CPayment {
+  id: string;
+  memberId: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string; // 'MOBILE_MONEY', 'BANK_TRANSFER', etc.
+  paymentReference: string;
+  status: Y2CPaymentStatus;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  member?: Y2CMember; // optionnel, pour les données jointes
 }
 
 // ✅ Ajout d’un champ dérivé (non renvoyé par le backend)

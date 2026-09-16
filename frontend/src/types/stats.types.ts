@@ -1,5 +1,4 @@
 // src/types/stats.types.ts
-// ============================================================
 export interface GlobalStats {
   users: number;
   formations: number;

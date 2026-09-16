@@ -1,11 +1,20 @@
 // src/types/team.types.ts
-// ============================================================
-import { PaginationParams, UserRef } from './common.types';
+import { PaginationParams } from './common.types';
+
+export interface UserRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  email: string;
+  avatar?: string | null;
+}
 
 export interface TeamMember {
   id: string;
   userId: string;
-  user: UserRef;
+  user?: UserRef;      // camelCase (ex: include: { user: true })
+  User?: UserRef;      // PascalCase (ex: include: { User: true })
   role: string;
   department: string;
   bio?: string;

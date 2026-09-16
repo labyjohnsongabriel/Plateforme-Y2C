@@ -47,7 +47,7 @@ export interface Formation {
   objectives?: string;
   prerequisites?: string;
   duration: string;
-  level: string;
+  level: FormationLevel; // ✅ corrigé : utilise l'enum
   price: number;
   category: string;
   imageUrl?: string;
@@ -67,7 +67,7 @@ export interface FormationSession {
   location: string;
   maxParticipants: number;
   currentParticipants: number;
-  status: string;
+  status: string; // ex: "SCHEDULED", "ONGOING", etc.
   price?: number;
   createdAt: string;
   updatedAt: string;
@@ -100,7 +100,7 @@ export interface FormationCreateDTO {
   objectives?: string;
   prerequisites?: string;
   duration: string;
-  level: string;
+  level: FormationLevel; // ✅ corrigé
   price: number;
   category: string;
   imageUrl?: string;
@@ -115,7 +115,7 @@ export interface FormationUpdateDTO extends Partial<FormationCreateDTO> {}
 // ============================================================
 export interface FormationFilters extends PaginationParams {
   category?: string;
-  level?: string;
+  level?: FormationLevel; // ✅ corrigé
   minPrice?: number;
   maxPrice?: number;
   isPublished?: boolean;
@@ -129,8 +129,85 @@ export interface FormationStats {
   published: number;
   draft: number;
   byCategory: Record<string, number>;
-  byLevel: Record<string, number>;
+  byLevel: Record<FormationLevel, number>; // ✅ clé typée
   totalRegistrations: number;
   avgPrice: number;
   mostPopular?: Formation;
+}
+
+// ============================================================
+// EXPORT (types liés aux formations)
+// ============================================================
+export enum ExportType {
+  FORMATIONS = 'FORMATIONS',
+  INSCRIPTIONS = 'INSCRIPTIONS',
+  PAIEMENTS = 'PAIEMENTS',
+  MEMBRES_Y2C = 'MEMBRES_Y2C',
+  ARTICLES = 'ARTICLES',
+  PROJETS = 'PROJETS',
+  UTILISATEURS = 'UTILISATEURS',
+  RECRUTEMENTS = 'RECRUTEMENTS',
+  CANDIDATURES = 'CANDIDATURES',
+  CONTACTS = 'CONTACTS',
+}
+
+export enum ExportFormat {
+  CSV = 'CSV',
+  EXCEL = 'EXCEL',
+  PDF = 'PDF',
+}
+
+export enum ExportStatus {
+  PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}
+
+export interface ExportFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  paymentStatus?: string;
+  formationId?: string;
+  sessionId?: string;
+  userId?: string;
+  search?: string;
+}
+
+export interface ExportHistory {
+  id: string;
+  type: ExportType;
+  format: ExportFormat;
+  filters: ExportFilters;
+  fileName: string;
+  fileUrl?: string;
+  fileSize?: number;
+  status: ExportStatus;
+  error?: string;
+  requestedBy: string;
+  createdAt: string;
+  completedAt?: string;
+  user?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface ExportHistoryList {
+  items: ExportHistory[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface ExportStats {
+  total: number;
+  byStatus: Record<ExportStatus, number>;
+  byType: Record<ExportType, number>;
 }
