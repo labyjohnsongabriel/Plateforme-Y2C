@@ -12,6 +12,7 @@ import { ArticleRepository } from '../repositories/article.repository';
 import { PaymentRepository } from '../repositories/payment.repository';
 import { logger } from '../config/logger';
 import prisma from '../../prisma/client';
+import { getIO } from '../sockets/socket.server';
 import {
   PaymentStatus,
   RegistrationStatus,
@@ -48,9 +49,12 @@ export class DashboardService {
   /**
    * ⚡ Récupère toutes les données du tableau de bord
    */
-  async getDashboardData(): Promise<any> {
+  async getDashboardData(userId?: string): Promise<any> {
     const start = Date.now();
     try {
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+
       const [
         totalUsers,
         activeUsers,
@@ -67,6 +71,16 @@ export class DashboardService {
         totalArticles,
         publishedArticles,
         unreadMessages,
+        totalEvents,
+        publishedEvents,
+        totalY2CEvents,
+        publishedY2CEvents,
+        totalPartners,
+        activePartners,
+        totalNotifications,
+        unreadNotifications,
+        recentSignups,
+        revenueAggregate,
       ] = await prisma.$transaction([
         prisma.user.count(),
         prisma.user.count({ where: { isActive: true } }),
@@ -83,7 +97,22 @@ export class DashboardService {
         prisma.article.count(),
         prisma.article.count({ where: { status: ArticleStatus.PUBLISHED } }),
         prisma.contactMessage.count({ where: { isRead: false } }),
+        prisma.event.count(),
+        prisma.event.count({ where: { isPublished: true } }),
+        prisma.y2CEvent.count(),
+        prisma.y2CEvent.count({ where: { isPublished: true } }),
+        prisma.partner.count(),
+        prisma.partner.count({ where: { isActive: true } }),
+        prisma.notification.count(),
+        prisma.notification.count({ where: { isRead: false } }),
+        prisma.user.count({ where: { createdAt: { gte: startOfDay } } }),
+        prisma.payment.aggregate({
+          where: { status: PaymentStatus.PAID },
+          _sum: { amount: true },
+        }),
       ]);
+
+      const userStats = await this.userRepository.getStats();
 
       // ✅ Activités récentes – relation "User" (majuscule)
       const recentActivities = await this.activityLogRepository.findMany({
@@ -96,9 +125,11 @@ export class DashboardService {
         },
       });
 
-      // Notifications
+      const notificationWhere: { isRead: boolean; userId?: string } = { isRead: false };
+      if (userId) notificationWhere.userId = userId;
+
       const notifications = await this.notificationRepository.findMany({
-        where: { isRead: false },
+        where: notificationWhere,
         take: 10,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -106,28 +137,58 @@ export class DashboardService {
           title: true,
           message: true,
           link: true,
+          type: true,
           createdAt: true,
           isRead: true,
         },
       });
 
+      const monthlyStats = await this.statsService.getMonthlyStats();
+      const chartData = (monthlyStats?.daily || []).map((d: any) => ({
+        month: new Date(d.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+        inscriptions: d.newRegistrations ?? 0,
+        formations: d.newFormations ?? 0,
+        y2c: d.newY2CMembers ?? 0,
+      }));
+
+      const roleData = Object.entries(userStats.byRole || {}).map(([name, value]) => ({
+        name,
+        value: value as number,
+      }));
+
+      const io = getIO();
+      const connectedClients = io?.engine?.clientsCount ?? 0;
+
       logger.debug(`📊 Dashboard data fetched in ${Date.now() - start}ms`);
 
       return {
         stats: {
-          users: { total: totalUsers, active: activeUsers },
+          users: { total: totalUsers, active: activeUsers, byRole: userStats.byRole },
           formations: { total: totalFormations, published: publishedFormations },
           registrations: { total: totalRegistrations, confirmed: confirmedRegistrations },
           y2c: { total: totalY2CMembers, active: activeY2CMembers },
           projects: { total: totalProjects, completed: completedProjects },
-          payments: { total: totalPayments, success: successPayments },
+          payments: {
+            total: totalPayments,
+            success: successPayments,
+            revenue: revenueAggregate._sum?.amount ?? 0,
+          },
           articles: { total: totalArticles, published: publishedArticles },
+          events: {
+            total: totalEvents + totalY2CEvents,
+            published: publishedEvents + publishedY2CEvents,
+          },
+          partners: { total: totalPartners, active: activePartners },
+          notifications: { total: totalNotifications, unread: unreadNotifications },
           contact: { unread: unreadMessages },
+          pendingValidations: unreadMessages,
+          recentSignups,
         },
+        chartData,
+        roleData,
         realtime: {
-          activeUsers: 42,
-          requestsPerMinute: 120,
-          responseTime: 150,
+          activeUsers: connectedClients,
+          onlineUsers: connectedClients,
           timestamp: new Date(),
         },
         activities: recentActivities,
@@ -205,50 +266,40 @@ export class DashboardService {
   }
 
   async getQuickStats(): Promise<any> {
-    const [
-      totalUsers,
-      totalFormations,
-      totalRegistrations,
-      totalY2CMembers,
-      totalProjects,
-      totalArticles,
-      totalPayments,
-      revenueAggregate,
-    ] = await Promise.all([
-      this.userRepository.count(),
-      this.formationRepository.count(),
-      this.registrationRepository.count(),
-      this.y2cMemberRepository.count(),
-      this.projectRepository.count(),
-      this.articleRepository.count(),
-      this.paymentRepository.count(),
+    const now = new Date();
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [activeUsers, newUsersToday, registrationsThisWeek, revenueThisMonth] = await Promise.all([
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.user.count({ where: { createdAt: { gte: startOfDay } } }),
+      prisma.registration.count({ where: { createdAt: { gte: startOfWeek } } }),
       prisma.payment.aggregate({
-        where: { status: PaymentStatus.PAID },
+        where: {
+          status: PaymentStatus.PAID,
+          OR: [{ paidAt: { gte: startOfMonth } }, { paidAt: null, createdAt: { gte: startOfMonth } }],
+        },
         _sum: { amount: true },
       }),
     ]);
 
     return {
-      totalUsers,
-      totalFormations,
-      totalRegistrations,
-      totalY2CMembers,
-      totalProjects,
-      totalArticles,
-      totalPayments,
-      revenue: revenueAggregate._sum?.amount ?? 0,
+      activeUsers,
+      newUsersToday,
+      registrationsThisWeek,
+      revenueThisMonth: revenueThisMonth._sum?.amount ?? 0,
     };
   }
 
   async getPerformanceMetrics(): Promise<any> {
+    const io = getIO();
     return {
-      responseTime: 150,
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
-      cpuUsage: 20,
-      activeUsers: 42,
-      requestsPerMinute: 120,
-      errorRate: 0.5,
+      activeUsers: io?.engine?.clientsCount ?? 0,
       timestamp: new Date(),
     };
   }
@@ -275,7 +326,7 @@ export class DashboardService {
     ];
   }
 
-  async getStats(): Promise<any> {
-    return this.getDashboardData();
+  async getStats(userId?: string): Promise<any> {
+    return this.getDashboardData(userId);
   }
 }

@@ -17,7 +17,7 @@ export class DashboardController extends BaseController {
    */
   getStats = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const stats = await this.dashboardService.getDashboardData();
+      const stats = await this.dashboardService.getDashboardData(req.user?.id);
       this.sendSuccess(res, stats);
     } catch (error) {
       this.handleError(next, error);

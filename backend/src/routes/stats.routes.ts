@@ -7,14 +7,15 @@ import { cacheMiddleware } from '../middlewares/cache.middleware';
 const router = Router();
 const statsController = new StatsController();
 
-// All stats routes require admin access
-router.use(authMiddleware, isAdmin);
-
+// ─── Route publique (sans authentification) ───────────────────
 router.get(
   '/global',
-  cacheMiddleware(300),
+  cacheMiddleware(300), // 5 minutes de cache
   statsController.getGlobalStats
 );
+
+// ─── Routes protégées (admin uniquement) ──────────────────────
+router.use(authMiddleware, isAdmin); // ✅ Appliqué uniquement aux routes suivantes
 
 router.get(
   '/daily',
