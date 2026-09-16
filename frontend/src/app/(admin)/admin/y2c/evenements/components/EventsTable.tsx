@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
+import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/admin/DataTable';
@@ -23,8 +24,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { cn, formatDate } from '@/lib/utils';
-import { MoreHorizontal, Eye, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { buildImageUrl } from '@/lib/imageUtils';
+import {
+  MoreHorizontal,
+  Eye,
+  Pencil,
+  Trash2,
+  Users,
+  Calendar,
+  Image as ImageIcon,
+  DollarSign,
+  CreditCard,
+} from 'lucide-react';
 import Link from 'next/link';
 
 export type Y2CEventType =
@@ -54,6 +72,9 @@ export interface Y2CEvent {
   isPublished: boolean;
   createdAt: string;
   updatedAt: string;
+  // ✅ Statistiques de paiement
+  paidRegistrations?: number;
+  totalCollected?: number;
 }
 
 interface EventsTableProps {
@@ -120,7 +141,6 @@ export function EventsTable({
   const [deleteTarget, setDeleteTarget] = useState<Y2CEvent | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleDeleteClick = (event: Y2CEvent) => {
     setDeleteTarget(event);
@@ -141,21 +161,59 @@ export function EventsTable({
     }
   };
 
-  const handleRefresh = () => {
-    if (onRefresh) {
-      setIsRefreshing(true);
-      onRefresh();
-      setTimeout(() => setIsRefreshing(false), 500);
-    }
-  };
-
   const columns: ColumnDef<Y2CEvent>[] = [
+    // ─── Colonne Image ────────────────────────────────────────
+    {
+      id: 'image',
+      accessorKey: 'imageUrl',
+      header: 'Image',
+      cell: ({ row }) => {
+        const imageUrl = row.original.imageUrl;
+        const title = row.original.title;
+        const hasImage = imageUrl && imageUrl.trim() !== '';
+
+        return (
+          <div className="relative h-12 w-16 overflow-hidden rounded-md border bg-muted">
+            {hasImage ? (
+              <Image
+                src={buildImageUrl(imageUrl, false)}
+                alt={title}
+                fill
+                className="object-cover transition-transform duration-200 group-hover:scale-105"
+                sizes="64px"
+                unoptimized
+                onError={(e) => {
+                  // En cas d'erreur, on masque l'image et on affiche le placeholder
+                  const target = e.currentTarget;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    const fallback = parent.querySelector('.fallback-icon');
+                    if (fallback) fallback.classList.remove('hidden');
+                  }
+                }}
+              />
+            ) : null}
+            <div className={`fallback-icon flex h-full w-full items-center justify-center ${hasImage ? 'hidden' : ''}`}>
+              <ImageIcon className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+          </div>
+        );
+      },
+    },
+    // ─── Titre ────────────────────────────────────────────────
     {
       id: 'title',
       accessorKey: 'title',
       header: 'Titre',
-      cell: ({ row }) => <span className="font-medium">{row.original.title}</span>,
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.title}</p>
+          <p className="text-xs text-muted-foreground">{row.original.location}</p>
+        </div>
+      ),
     },
+    // ─── Type ─────────────────────────────────────────────────
     {
       id: 'eventType',
       accessorKey: 'eventType',
@@ -170,20 +228,21 @@ export function EventsTable({
         );
       },
     },
+    // ─── Date ──────────────────────────────────────────────────
     {
       id: 'startDate',
       accessorKey: 'startDate',
       header: 'Date',
-      cell: ({ row }) => formatDate(row.original.startDate),
-    },
-    {
-      id: 'location',
-      accessorKey: 'location',
-      header: 'Lieu',
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.location}</span>
+        <div>
+          <p className="text-sm">{formatDate(row.original.startDate)}</p>
+          <p className="text-xs text-muted-foreground">
+            {new Date(row.original.startDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        </div>
       ),
     },
+    // ─── Statut (publié/brouillon) ──────────────────────────
     {
       id: 'isPublished',
       accessorKey: 'isPublished',
@@ -202,9 +261,75 @@ export function EventsTable({
         </Badge>
       ),
     },
+    // ─── Places ───────────────────────────────────────────────
+    {
+      id: 'maxParticipants',
+      accessorKey: 'maxParticipants',
+      header: 'Places',
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">
+          {row.original.maxParticipants || '∞'}
+        </span>
+      ),
+    },
+    // ─── Inscriptions payées ─────────────────────────────────
+    {
+      id: 'paidRegistrations',
+      accessorKey: 'paidRegistrations',
+      header: () => (
+        <div className="flex items-center gap-1">
+          <CreditCard className="h-3.5 w-3.5" />
+          <span>Payé</span>
+        </div>
+      ),
+      cell: ({ row }) => {
+        const count = row.original.paidRegistrations ?? 0;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-medium tabular-nums">{count}</span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Nombre d'inscriptions payées</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
+    },
+    // ─── Total collecté ──────────────────────────────────────
+    {
+      id: 'totalCollected',
+      accessorKey: 'totalCollected',
+      header: () => (
+        <div className="flex items-center gap-1">
+          <DollarSign className="h-3.5 w-3.5" />
+          <span>Total collecté</span>
+        </div>
+      ),
+      cell: ({ row }) => {
+        const amount = row.original.totalCollected ?? 0;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-semibold text-secondary tabular-nums">
+                  {amount.toLocaleString()} Ar
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Montant total collecté (inscriptions payées)</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
+    },
+    // ─── Actions ─────────────────────────────────────────────
     {
       id: 'actions',
-      header: 'Actions',
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const event = row.original;
         return (
@@ -219,7 +344,7 @@ export function EventsTable({
                 <span className="sr-only">Actions</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
@@ -238,6 +363,15 @@ export function EventsTable({
                 <Pencil className="h-4 w-4" />
                 Modifier
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link
+                  href={`/admin/y2c/evenements/${event.id}/inscriptions`}
+                  className="flex items-center gap-2"
+                >
+                  <Users className="h-4 w-4" />
+                  Inscriptions
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => handleDeleteClick(event)}
@@ -254,18 +388,15 @@ export function EventsTable({
   ];
 
   return (
-    <>
+    <TooltipProvider>
       <DataTable
         columns={columns}
         data={data}
         searchKey="title"
         searchPlaceholder="Rechercher un événement..."
-        loading={loading || isRefreshing}
+        loading={loading}
         addButtonLabel="Ajouter un événement"
-        onAdd={() => {
-          // Le parent gère l'ouverture du formulaire via le bouton "Nouvel événement"
-        }}
-        onRefresh={handleRefresh}
+        onRefresh={onRefresh}
       />
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -289,6 +420,6 @@ export function EventsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </TooltipProvider>
   );
 }

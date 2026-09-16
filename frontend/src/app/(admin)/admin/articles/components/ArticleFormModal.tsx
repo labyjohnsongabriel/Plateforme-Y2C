@@ -2,11 +2,11 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText,
   Tag,
@@ -14,6 +14,9 @@ import {
   X,
   Star,
   Pencil,
+  Image as ImageIcon,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -43,9 +46,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { articles } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+// ✅ Import de l'API principale
+import { api, articles } from '@/lib/api';
+import { buildImageUrl } from '@/lib/imageUtils';
 import toast from 'react-hot-toast';
 import { Article } from './ArticlesTable';
+import { cn } from '@/lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────
 const CATEGORIES = [
@@ -74,6 +81,7 @@ const articleSchema = z.object({
   tags: z.string().optional(),
   status: z.string().default('DRAFT'),
   isFeatured: z.boolean().default(false),
+  featuredImage: z.string().optional(),
 });
 
 type ArticleFormData = z.infer<typeof articleSchema>;
@@ -81,7 +89,7 @@ type ArticleFormData = z.infer<typeof articleSchema>;
 interface ArticleFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  article?: Article | null; // pour l'édition
+  article?: Article | null;
   onSuccess?: () => void;
 }
 
@@ -93,6 +101,11 @@ export function ArticleFormModal({
   onSuccess,
 }: ArticleFormModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isEditing = !!article;
 
   const form = useForm<ArticleFormData>({
@@ -105,12 +118,14 @@ export function ArticleFormModal({
       tags: '',
       status: 'DRAFT',
       isFeatured: false,
+      featuredImage: '',
     },
   });
 
-  // Remplir le formulaire en mode édition
+  // ─── Remplir le formulaire en mode édition ──────────────
   useEffect(() => {
     if (open && article) {
+      const imageUrl = article.featuredImage || '';
       form.reset({
         title: article.title || '',
         content: article.content || '',
@@ -119,7 +134,14 @@ export function ArticleFormModal({
         tags: article.tags?.join(', ') || '',
         status: article.status || 'DRAFT',
         isFeatured: article.isFeatured || false,
+        featuredImage: imageUrl,
       });
+      if (imageUrl) {
+        setImagePreview(buildImageUrl(imageUrl, false));
+        setImageError(false);
+      } else {
+        setImagePreview(null);
+      }
     }
     if (open && !article) {
       form.reset({
@@ -130,7 +152,10 @@ export function ArticleFormModal({
         tags: '',
         status: 'DRAFT',
         isFeatured: false,
+        featuredImage: '',
       });
+      setImagePreview(null);
+      setImageError(false);
     }
   }, [open, article, form]);
 
@@ -138,6 +163,63 @@ export function ArticleFormModal({
   const status = form.watch('status');
   const isPublished = status === 'PUBLISHED';
 
+  // ─── Upload d'image ──────────────────────────────────────
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Veuillez sélectionner une image');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('L\'image ne doit pas dépasser 5 Mo');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      // ✅ Utilisation de api.post
+      const response = await api.post('/upload/single', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const imageUrl = response.data?.data?.url || response.data?.url;
+      if (imageUrl) {
+        form.setValue('featuredImage', imageUrl);
+        toast.success('Image uploadée ✅');
+        setImageError(false);
+      }
+    } catch (error) {
+      toast.error('Erreur lors de l\'upload de l\'image');
+      setImagePreview(null);
+      form.setValue('featuredImage', '');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // ─── Supprimer l'image ──────────────────────────────────
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setImageError(false);
+    form.setValue('featuredImage', '');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // ─── Soumission ──────────────────────────────────────────
   const onSubmit = async (data: ArticleFormData) => {
     setIsSubmitting(true);
     try {
@@ -145,7 +227,7 @@ export function ArticleFormModal({
         ...data,
         tags: data.tags ? data.tags.split(',').map((t) => t.trim()) : [],
       };
-      
+
       if (isEditing && article) {
         await articles.update(article.id, payload);
         toast.success('Article modifié avec succès ✅');
@@ -153,7 +235,7 @@ export function ArticleFormModal({
         await articles.create(payload);
         toast.success('Article créé avec succès 🎉');
       }
-      
+
       form.reset();
       onSuccess?.();
       onOpenChange(false);
@@ -168,6 +250,8 @@ export function ArticleFormModal({
   const handleClose = () => {
     if (!isSubmitting) {
       form.reset();
+      setImagePreview(null);
+      setImageError(false);
       onOpenChange(false);
     }
   };
@@ -215,10 +299,97 @@ export function ArticleFormModal({
           {/* ─── Formulaire ───────────────────────────────── */}
           <div className="p-6 pt-4">
             <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-5"
-              >
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                {/* ── Image à la une ─────────────────────────── */}
+                <div className="space-y-2">
+                  <FormLabel className="flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-secondary" />
+                    Image à la une
+                  </FormLabel>
+                  <div className="flex flex-col gap-4">
+                    <AnimatePresence mode="wait">
+                      {(imagePreview && !imageError) ? (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className="relative rounded-xl overflow-hidden border-2 border-secondary/20 bg-muted/10"
+                        >
+                          <img
+                            src={imagePreview}
+                            alt="Aperçu"
+                            className="w-full h-48 object-cover"
+                            onError={() => setImageError(true)}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                          <div className="absolute bottom-3 right-3 flex gap-2">
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="h-8 gap-1 text-xs"
+                              onClick={handleRemoveImage}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Supprimer
+                            </Button>
+                          </div>
+                          {isUploading && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                              <Loader2 className="h-8 w-8 animate-spin text-white" />
+                              <span className="ml-2 text-sm font-medium text-white">Upload...</span>
+                            </div>
+                          )}
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className={cn(
+                            'flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-colors',
+                            isUploading
+                              ? 'border-primary/30 bg-primary/5'
+                              : 'border-muted-foreground/25 hover:border-secondary/40 hover:bg-secondary/5 cursor-pointer'
+                          )}
+                          onClick={() => !isUploading && fileInputRef.current?.click()}
+                        >
+                          {isUploading ? (
+                            <Loader2 className="h-10 w-10 animate-spin text-secondary" />
+                          ) : (
+                            <>
+                              <Upload className="h-10 w-10 text-muted-foreground/50" />
+                              <p className="mt-2 text-sm font-medium text-muted-foreground">
+                                Cliquez pour ajouter une image
+                              </p>
+                              <p className="text-xs text-muted-foreground/60">
+                                JPEG, PNG, WEBP – Max 5 Mo
+                              </p>
+                            </>
+                          )}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                      disabled={isUploading}
+                    />
+
+                    <p className="text-xs text-muted-foreground">
+                      {isEditing && article?.featuredImage && !imagePreview
+                        ? 'Image actuelle non disponible'
+                        : 'Une image de couverture rend votre article plus attractif.'}
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
                 {/* ── Titre ── */}
                 <FormField
                   control={form.control}
@@ -244,7 +415,7 @@ export function ArticleFormModal({
                   )}
                 />
 
-                {/* ── Catégorie ── */}
+                {/* ── Catégorie + Tags ── */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -277,7 +448,6 @@ export function ArticleFormModal({
                     )}
                   />
 
-                  {/* ── Tags ── */}
                   <FormField
                     control={form.control}
                     name="tags"
@@ -353,7 +523,6 @@ export function ArticleFormModal({
 
                 {/* ── Options ── */}
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {/* ── Statut ── */}
                   <FormField
                     control={form.control}
                     name="status"
@@ -388,7 +557,6 @@ export function ArticleFormModal({
                     )}
                   />
 
-                  {/* ── Vedette ── */}
                   <FormField
                     control={form.control}
                     name="isFeatured"
@@ -403,7 +571,14 @@ export function ArticleFormModal({
                               disabled={isSubmitting}
                             />
                             <span className="text-sm text-muted-foreground">
-                              {field.value ? '⭐ Mis en avant' : 'Standard'}
+                              {field.value ? (
+                                <span className="flex items-center gap-1 text-amber-600">
+                                  <Star className="h-4 w-4 fill-amber-500" />
+                                  Mis en avant
+                                </span>
+                              ) : (
+                                'Standard'
+                              )}
                             </span>
                           </div>
                         </FormControl>

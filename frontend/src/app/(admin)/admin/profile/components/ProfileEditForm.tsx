@@ -5,18 +5,19 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { users } from '@/lib/api';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
-import { AvatarUpload } from '@/components/ui/avatar-upload';
+import { Loader2, User, Mail, Phone, Building2 } from 'lucide-react';
+import { AvatarUpload } from './AvatarUpload';
+import { Separator } from '@/components/ui/separator';
 
 const profileSchema = z.object({
-  firstName: z.string().min(2, 'Le prénom est requis'),
-  lastName: z.string().min(2, 'Le nom est requis'),
-  email: z.string().email('Email invalide'),
+  firstName: z.string().min(2, 'Le prénom est requis (minimum 2 caractères)'),
+  lastName: z.string().min(2, 'Le nom est requis (minimum 2 caractères)'),
+  email: z.string().email('Adresse email invalide'),
   phone: z.string().optional(),
   bio: z.string().optional(),
 });
@@ -41,15 +42,12 @@ export function ProfileEditForm({ profile, onSuccess, onCancel }) {
     },
   });
 
-  // ─── Mise à jour des informations ──────────────────────────
   const onSubmit = async (data: ProfileFormData) => {
     try {
       setLoading(true);
       await users.updateProfile(data);
-      onSuccess(); // ← rafraîchit le profil parent
-      toast.success('Profil mis à jour ✅');
+      onSuccess();
     } catch (error: any) {
-      // Affichage du message d’erreur renvoyé par le backend
       const msg = error?.response?.data?.message || error?.response?.data?.error || 'Erreur lors de la mise à jour';
       toast.error(msg);
       console.error('Erreur updateProfile:', error);
@@ -58,17 +56,15 @@ export function ProfileEditForm({ profile, onSuccess, onCancel }) {
     }
   };
 
-  // ─── Upload de l’avatar ──────────────────────────────────────
   const handleAvatarUpload = async (file: File) => {
     try {
       setUploadingAvatar(true);
       const formData = new FormData();
       formData.append('avatar', file);
       await users.uploadAvatar(formData);
-      onSuccess(); // ← rafraîchit le profil pour afficher le nouvel avatar
+      onSuccess();
       toast.success('Avatar mis à jour ✅');
     } catch (error: any) {
-      // Affichage du message d’erreur renvoyé par le backend
       const msg = error?.response?.data?.error || error?.response?.data?.message || 'Erreur lors du téléchargement';
       toast.error(msg);
       console.error('Erreur uploadAvatar:', error);
@@ -79,15 +75,17 @@ export function ProfileEditForm({ profile, onSuccess, onCancel }) {
 
   const fullName = profile ? `${profile.firstName || ''} ${profile.lastName || ''}`.trim() : '';
 
-  // ─── Rendu ────────────────────────────────────────────────────
   return (
-    <Card>
+    <Card className="border-0 shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <User className="h-5 w-5 text-secondary" />
+          Modifier mes informations
+        </CardTitle>
+      </CardHeader>
+      <Separator />
       <form onSubmit={handleSubmit(onSubmit)}>
-        <CardHeader>
-          <CardTitle>Modifier mes informations</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Upload d’avatar */}
+        <CardContent className="space-y-6 pt-6">
           <AvatarUpload
             currentAvatar={profile?.avatar}
             onUpload={handleAvatarUpload}
@@ -95,45 +93,75 @@ export function ProfileEditForm({ profile, onSuccess, onCancel }) {
             name={fullName || 'Utilisateur'}
           />
 
-          {/* Champs du formulaire */}
+          <Separator />
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">Prénom</Label>
-              <Input id="firstName" {...register('firstName')} />
+              <Label htmlFor="firstName" className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                Prénom
+              </Label>
+              <Input
+                id="firstName"
+                {...register('firstName')}
+                className={errors.firstName ? 'border-destructive' : ''}
+              />
               {errors.firstName && <p className="text-sm text-destructive">{errors.firstName.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="lastName">Nom</Label>
-              <Input id="lastName" {...register('lastName')} />
+              <Input
+                id="lastName"
+                {...register('lastName')}
+                className={errors.lastName ? 'border-destructive' : ''}
+              />
               {errors.lastName && <p className="text-sm text-destructive">{errors.lastName.message}</p>}
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" {...register('email')} />
+            <Label htmlFor="email" className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              {...register('email')}
+              className={errors.email ? 'border-destructive' : ''}
+            />
             {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Téléphone</Label>
+            <Label htmlFor="phone" className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              Téléphone
+            </Label>
             <Input id="phone" {...register('phone')} />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bio">Bio / Institution</Label>
-            <Input id="bio" {...register('bio')} placeholder="Courte présentation ou institution" />
+            <Label htmlFor="bio" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-muted-foreground" />
+              Institution / Bio
+            </Label>
+            <Input
+              id="bio"
+              {...register('bio')}
+              placeholder="Courte présentation ou institution"
+            />
           </div>
         </CardContent>
 
-        {/* Boutons d’action */}
-        <CardFooter className="flex justify-end gap-2">
+        <Separator />
+        <CardFooter className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onCancel} disabled={loading || uploadingAvatar}>
             Annuler
           </Button>
-          <Button type="submit" disabled={loading || uploadingAvatar}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Enregistrer
+          <Button type="submit" disabled={loading || uploadingAvatar} className="gap-2">
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            Enregistrer les modifications
           </Button>
         </CardFooter>
       </form>

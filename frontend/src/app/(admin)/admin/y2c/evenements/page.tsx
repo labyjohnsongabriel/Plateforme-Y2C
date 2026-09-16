@@ -11,12 +11,15 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { Card, CardContent } from '@/components/ui/card';
+import { AlertCircle } from 'lucide-react';
 
 export default function AdminY2CEventsPage() {
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -27,11 +30,14 @@ export default function AdminY2CEventsPage() {
       setLoading(false);
       return;
     }
+
+    setError(null);
     try {
       setLoading(true);
       const response = await y2c.getEvents();
-      // ✅ Correction : le tableau est dans response.data.data.data
-      const eventsData = response.data?.data?.data ?? response.data?.data ?? response.data ?? [];
+      // ✅ Extraction robuste du tableau
+      let eventsData = response?.data?.data?.data ?? response?.data?.data ?? response?.data ?? [];
+      if (!Array.isArray(eventsData)) eventsData = [];
       setEvents(eventsData);
     } catch (error: any) {
       if (error.response?.status === 401) {
@@ -44,7 +50,9 @@ export default function AdminY2CEventsPage() {
         return;
       }
       console.error('❌ Erreur chargement événements :', error);
-      toast.error('Impossible de charger les événements');
+      const msg = error?.response?.data?.message || 'Impossible de charger les événements';
+      setError(msg);
+      toast.error(msg);
       setEvents([]);
     } finally {
       setLoading(false);
@@ -87,10 +95,11 @@ export default function AdminY2CEventsPage() {
   };
 
   const handleRefresh = async () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
     await fetchEvents();
     setIsRefreshing(false);
-    toast.success('✅ Liste actualisée');
+    if (!error) toast.success('✅ Liste actualisée');
   };
 
   // ─── États de chargement / auth ──────────────────────────
@@ -139,7 +148,7 @@ export default function AdminY2CEventsPage() {
               className="gap-1.5"
             >
               <RefreshCw className={cn('h-4 w-4', isRefreshing && 'animate-spin')} />
-              Rafraîchir
+              {isRefreshing ? 'Actualisation...' : 'Rafraîchir'}
             </Button>
             <Button
               onClick={handleOpenCreate}
@@ -151,12 +160,28 @@ export default function AdminY2CEventsPage() {
           </div>
         </div>
 
+        {/* Affichage d’erreur */}
+        {error && (
+          <Card className="border-2 border-destructive/20 bg-destructive/5">
+            <CardContent className="flex items-center gap-3 py-4">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
+              <div>
+                <p className="font-medium text-destructive">Erreur de chargement</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchEvents} className="ml-auto">
+                Réessayer
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <EventsTable
           data={events}
           loading={loading}
           onEdit={handleEdit}
           onDelete={handleDelete}
-          onRefresh={handleRefresh}
+          onRefresh={fetchEvents}
         />
       </div>
 

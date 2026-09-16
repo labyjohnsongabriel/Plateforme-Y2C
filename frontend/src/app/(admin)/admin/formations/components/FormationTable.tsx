@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   MoreHorizontal,
@@ -11,7 +10,7 @@ import {
   Trash2,
   Globe,
   Lock,
-  Image as ImageIcon,
+  Calendar,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +36,15 @@ import {
 import { cn, formatDate } from '@/lib/utils';
 import { formations } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { buildImageUrl } from '@/lib/imageUtils';
+// ✅ Imports pour l'avatar
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export interface Formation {
   id: string;
@@ -62,10 +70,10 @@ interface FormationTableProps {
   loading?: boolean;
   onDelete: (id: string) => Promise<void>;
   onEdit: (formation: Formation) => void;
+  onFilterChange?: (filters: Record<string, any>) => void;
   onRefresh?: () => void;
 }
 
-// ─── Configuration des niveaux ────────────────────────────
 const levelLabels: Record<string, string> = {
   DÉBUTANT: 'Débutant',
   INTERMÉDIAIRE: 'Intermédiaire',
@@ -91,6 +99,7 @@ export function FormationTable({
   loading = false,
   onDelete,
   onEdit,
+  onFilterChange,
   onRefresh,
 }: FormationTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<Formation | null>(null);
@@ -132,27 +141,32 @@ export function FormationTable({
     }
   };
 
+  // ─── Colonnes ──────────────────────────────────────────────
   const columns: ColumnDef<Formation>[] = [
     {
       id: 'image',
       header: 'Image',
       cell: ({ row }) => {
-        const imageUrl = row.original.imageUrl;
+        const formation = row.original;
+        const imageUrl = formation.imageUrl;
+        const src = imageUrl ? buildImageUrl(imageUrl, false) : null;
+        const initials = formation.title?.charAt(0).toUpperCase() || '?';
+        const [imageError, setImageError] = useState(false);
+
         return (
-          <div className="flex h-12 w-16 items-center justify-center overflow-hidden rounded-md border bg-muted/20">
-            {imageUrl ? (
-              <Image
-                src={imageUrl}
-                alt={row.original.title}
-                width={64}
-                height={48}
-                className="h-full w-full object-cover"
-                unoptimized
+          <Avatar className="h-12 w-16 rounded-md border border-border/50">
+            {src && !imageError ? (
+              <AvatarImage
+                src={src}
+                alt={formation.title}
+                className="object-cover"
+                onError={() => setImageError(true)}
               />
-            ) : (
-              <ImageIcon className="h-5 w-5 text-muted-foreground" />
-            )}
-          </div>
+            ) : null}
+            <AvatarFallback className="rounded-md bg-muted/20 text-muted-foreground text-xs font-medium">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
         );
       },
     },
@@ -162,7 +176,16 @@ export function FormationTable({
       header: 'Titre',
       cell: ({ row }) => (
         <div className="min-w-0">
-          <p className="font-medium truncate">{row.original.title}</p>
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <p className="font-medium truncate cursor-default">{row.original.title}</p>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="max-w-xs">{row.original.title}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <p className="text-xs text-muted-foreground truncate">{row.original.category}</p>
         </div>
       ),
@@ -220,6 +243,19 @@ export function FormationTable({
             </>
           )}
         </Badge>
+      ),
+    },
+    {
+      id: 'sessions',
+      header: 'Sessions',
+      cell: ({ row }) => (
+        <Link
+          href={`/admin/formations/${row.original.id}`}
+          className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+        >
+          <Calendar className="h-3.5 w-3.5" />
+          <span>Voir</span>
+        </Link>
       ),
     },
     {

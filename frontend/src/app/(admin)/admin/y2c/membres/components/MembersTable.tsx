@@ -1,3 +1,4 @@
+// app/(admin)/admin/y2c/membres/components/MembersTable.tsx
 'use client';
 
 import { useState } from 'react';
@@ -15,6 +16,12 @@ import {
   RefreshCw,
   BadgeCheck,
   BadgeAlert,
+  Phone,
+  Copy,
+  Receipt,
+  CreditCard,
+  // IdCard n'existe pas dans toutes les versions de lucide-react → on utilise UserIcon à la place
+  Building,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,19 +49,38 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+// ✅ Import nommé de DataTable (car exporté nommé)
 import { DataTable } from '@/components/admin/DataTable';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Role } from '@/types/user.types';
 import { api } from '@/lib/api';
-import { Y2CMember, Y2CMemberStatus } from '@/types/y2c.types';
+import { buildImageUrl } from '@/lib/imageUtils';
+
+// ─── Types ────────────────────────────────────────────────────
+export type Y2CMemberStatus = 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'PENDING';
+
+export interface Y2CMember {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  studentId?: string;
+  institution?: string;
+  membershipFeePaid?: number;
+  badgeNumber?: string;
+  status: Y2CMemberStatus;
+  paymentReference?: string;
+  paymentMethod?: string;
+  amountPaid?: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 interface MemberWithAvatar extends Y2CMember {
   avatar?: string;
 }
-
-export type { Y2CMember, Y2CMemberStatus };
 
 interface MembersTableProps {
   data: MemberWithAvatar[];
@@ -72,26 +98,27 @@ const statusConfig: Record<
 > = {
   ACTIVE: {
     label: 'Actif',
-    color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200',
     icon: <CheckCircle className="h-3.5 w-3.5" />,
   },
   INACTIVE: {
     label: 'Inactif',
-    color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
+    color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border-slate-200',
     icon: <Clock className="h-3.5 w-3.5" />,
   },
   EXPIRED: {
     label: 'Expiré',
-    color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200',
     icon: <AlertCircle className="h-3.5 w-3.5" />,
   },
   PENDING: {
     label: 'En attente',
-    color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200',
     icon: <AlertCircle className="h-3.5 w-3.5" />,
   },
 };
 
+// ─── Composant principal ─────────────────────────────────────
 export function MembersTable({
   data,
   loading = false,
@@ -109,7 +136,6 @@ export function MembersTable({
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // ─── Rafraîchissement ──────────────────────────────────────
   const refetchMembers = () => {
     onMemberUpdated?.();
   };
@@ -121,7 +147,7 @@ export function MembersTable({
     toast.success('✅ Liste actualisée');
   };
 
-  // ─── Actions ──────────────────────────────────────────────
+  // ─── Suppression ───────────────────────────────────────────
   const handleDelete = async (member: MemberWithAvatar) => {
     setDeleteTarget(member);
     setIsDeleteDialogOpen(true);
@@ -147,8 +173,8 @@ export function MembersTable({
     }
   };
 
+  // ─── Génération de badge ──────────────────────────────────
   const handleGenerateBadge = async (member: MemberWithAvatar) => {
-    // Vérification robuste pour éviter de générer un badge déjà existant
     if (member.badgeNumber && member.badgeNumber.trim() !== '') {
       toast.info('Badge déjà généré');
       return;
@@ -169,11 +195,17 @@ export function MembersTable({
     }
   };
 
-  // ─── Colonnes ──────────────────────────────────────────────
+  const copyPhone = (phone: string) => {
+    navigator.clipboard.writeText(phone);
+    toast.success('Numéro copié');
+  };
+
+  // ─── Définition des colonnes ──────────────────────────────
   const columns: ColumnDef<MemberWithAvatar>[] = [
+    // 1. Membre (avatar + nom + email)
     {
       id: 'name',
-      header: 'Nom',
+      header: 'Membre',
       accessorFn: (row) => row.name,
       cell: ({ row }) => {
         const member = row.original;
@@ -183,14 +215,14 @@ export function MembersTable({
           .join('');
         return (
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9 border">
-              <AvatarImage src={member.avatar} alt={member.name} />
-              <AvatarFallback className="bg-gradient-to-br from-secondary/20 to-secondary/5 text-xs font-medium">
+            <Avatar className="h-10 w-10 border shadow-sm">
+              <AvatarImage src={member.avatar ? buildImageUrl(member.avatar, false) : undefined} alt={member.name} />
+              <AvatarFallback className="bg-gradient-to-br from-primary/10 to-secondary/5 text-xs font-medium">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <p className="font-medium truncate">{member.name}</p>
+              <p className="font-semibold text-sm truncate">{member.name}</p>
               <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                 <Mail className="h-3 w-3" />
                 {member.email}
@@ -200,13 +232,104 @@ export function MembersTable({
         );
       },
     },
+    // 2. Téléphone (avec copie)
+    {
+      id: 'phone',
+      accessorKey: 'phone',
+      header: 'Téléphone',
+      cell: ({ row }) => {
+        const phone = row.original.phone;
+        if (!phone) return <span className="text-muted-foreground text-sm">—</span>;
+        return (
+          <div className="flex items-center gap-1.5">
+            <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-mono text-sm">{phone}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              onClick={() => copyPhone(phone)}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+        );
+      },
+    },
+    // 3. N° étudiant – on utilise UserIcon au lieu de IdCard (qui n'existe pas dans toutes les versions)
+    {
+      id: 'studentId',
+      accessorKey: 'studentId',
+      header: 'N° étudiant',
+      cell: ({ row }) => {
+        const id = row.original.studentId;
+        return id ? (
+          <div className="flex items-center gap-1.5">
+            <UserIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-mono text-sm">{id}</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
+        );
+      },
+    },
+    // 4. Institution
+    {
+      id: 'institution',
+      accessorKey: 'institution',
+      header: 'Institution',
+      cell: ({ row }) => {
+        const inst = row.original.institution;
+        return inst ? (
+          <div className="flex items-center gap-1.5">
+            <Building className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-sm">{inst}</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">—</span>
+        );
+      },
+    },
+    // 5. Cotisation (membershipFeePaid)
+    {
+      id: 'membershipFeePaid',
+      accessorKey: 'membershipFeePaid',
+      header: 'Cotisation (Ar)',
+      cell: ({ row }) => {
+        const amount = row.original.membershipFeePaid;
+        return amount !== undefined && amount > 0 ? (
+          <div className="flex items-center gap-1.5">
+            <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-semibold text-sm">{amount.toLocaleString()} Ar</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-sm">0 Ar</span>
+        );
+      },
+    },
+    // 6. Référence de paiement
+    {
+      id: 'paymentReference',
+      accessorKey: 'paymentReference',
+      header: 'Référence paiement',
+      cell: ({ row }) => {
+        const ref = row.original.paymentReference;
+        if (!ref) return <span className="text-muted-foreground text-sm">—</span>;
+        return (
+          <div className="flex items-center gap-1.5">
+            <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="font-mono text-sm">{ref}</span>
+          </div>
+        );
+      },
+    },
+    // 7. Badge
     {
       id: 'badgeNumber',
       accessorKey: 'badgeNumber',
       header: 'Badge',
       cell: ({ row }) => {
         const member = row.original;
-        // Vérification robuste : badge présent si non null, non undefined et non vide
         const hasBadge = member.badgeNumber != null && member.badgeNumber.trim() !== '';
         return (
           <TooltipProvider>
@@ -215,10 +338,10 @@ export function MembersTable({
                 <Badge
                   variant="outline"
                   className={cn(
-                    'gap-1.5 font-medium text-[10px] uppercase',
+                    'gap-1.5 font-medium text-[10px] uppercase px-2.5 py-1',
                     hasBadge
-                      ? 'border-green-500/30 bg-green-500/10 text-green-600 dark:bg-green-500/20 dark:text-green-400'
-                      : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                      : 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400'
                   )}
                 >
                   {hasBadge ? (
@@ -235,19 +358,14 @@ export function MembersTable({
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>
-                {hasBadge ? 'Badge généré' : 'Badge non généré'}
+                {hasBadge ? 'Badge actif' : 'Badge non encore généré'}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         );
       },
     },
-    {
-      id: 'institution',
-      accessorKey: 'institution',
-      header: 'Institution',
-      cell: ({ row }) => row.original.institution || '—',
-    },
+    // 8. Statut
     {
       id: 'status',
       accessorKey: 'status',
@@ -256,26 +374,31 @@ export function MembersTable({
         const status = row.original.status;
         const config = statusConfig[status] || statusConfig.PENDING;
         return (
-          <Badge variant="outline" className={cn('gap-1.5 font-medium text-[10px] uppercase', config.color)}>
+          <Badge variant="outline" className={cn('gap-1.5 font-medium text-[10px] uppercase px-2.5 py-1', config.color)}>
             {config.icon}
             {config.label}
           </Badge>
         );
       },
     },
+    // 9. Date d'inscription
     {
       id: 'createdAt',
       accessorKey: 'createdAt',
       header: 'Inscrit le',
-      cell: ({ row }) => formatDate(row.original.createdAt),
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {formatDate(row.original.createdAt)}
+        </span>
+      ),
     },
+    // 10. Actions (menu déroulant)
     {
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const member = row.original;
         const isLoading = generatingId === member.id;
-        // Vérification robuste de la présence du badge
         const hasBadge = member.badgeNumber != null && member.badgeNumber.trim() !== '';
 
         return (
@@ -312,7 +435,7 @@ export function MembersTable({
                         {isLoading ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
                         ) : hasBadge ? (
-                          <BadgeCheck className="h-4 w-4 text-green-500" />
+                          <BadgeCheck className="h-4 w-4 text-emerald-500" />
                         ) : (
                           <BadgeAlert className="h-4 w-4 text-amber-500" />
                         )}
@@ -344,6 +467,7 @@ export function MembersTable({
     },
   ];
 
+  // ─── Rendu ──────────────────────────────────────────────────
   return (
     <TooltipProvider>
       <DataTable
@@ -352,9 +476,10 @@ export function MembersTable({
         searchKey="name"
         searchPlaceholder="Rechercher un membre..."
         loading={loading || isRefreshing}
-        addButtonLabel="Ajouter un membre"
+        // addButtonLabel="Ajouter un membre"
         onAdd={() => {
-          // Le parent gère l'ouverture du formulaire
+          // Cette fonction sera appelée depuis le parent (via une prop)
+          // On laisse le parent gérer l'ouverture du modal
         }}
         onRefresh={handleRefresh}
       />

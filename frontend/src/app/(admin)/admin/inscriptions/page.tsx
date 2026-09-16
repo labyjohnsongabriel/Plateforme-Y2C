@@ -11,19 +11,41 @@ export default function AdminRegistrationsPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchRegistrations = async () => {
+    try {
+      setLoading(true);
+      const response = await registrations.getAll();
+      setData(response.data.data || []);
+    } catch (error) {
+      toast.error('Erreur lors du chargement des inscriptions');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchRegistrations = async () => {
-      try {
-        const response = await registrations.getAll();
-        setData(response.data.data || []);
-      } catch (error) {
-        toast.error('Erreur lors du chargement des inscriptions');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchRegistrations();
   }, []);
+
+  const handleConfirm = async (id: string) => {
+    await registrations.confirm(id);
+    await fetchRegistrations();
+  };
+
+  const handleCancel = async (id: string) => {
+    await registrations.cancel(id);
+    await fetchRegistrations();
+  };
+
+  const handleDelete = async (id: string) => {
+    await registrations.delete(id);
+    await fetchRegistrations();
+  };
+
+  const handleView = (id: string) => {
+    // Rediriger vers la page de détail ou ouvrir un modal
+    window.location.href = `/admin/inscriptions/${id}`;
+  };
 
   return (
     <PageTransition>
@@ -37,7 +59,14 @@ export default function AdminRegistrationsPage() {
           </div>
           <ExportButton />
         </div>
-        <RegistrationsTable data={data} loading={loading} />
+        <RegistrationsTable
+          data={data}
+          loading={loading}
+          onConfirm={handleConfirm}
+          onCancel={handleCancel}
+          onDelete={handleDelete}
+          onView={handleView}
+        />
       </div>
     </PageTransition>
   );

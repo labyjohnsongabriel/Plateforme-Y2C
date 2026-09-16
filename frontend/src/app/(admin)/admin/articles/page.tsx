@@ -87,6 +87,11 @@ export default function AdminArticlesPage() {
     }
   };
 
+  // ✅ Nouveau handler pour la visualisation des commentaires
+  const handleViewComments = (articleId: string) => {
+    router.push(`/admin/comments?articleId=${articleId}`);
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchArticles();
@@ -152,12 +157,13 @@ export default function AdminArticlesPage() {
           </div>
         </div>
 
-        {/* ─── Tableau ──────────────────────────────────── */}
+        {/* ─── Tableau avec gestion des commentaires ──── */}
         <ArticlesTable
           data={data}
           loading={loading}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onViewComments={handleViewComments}  // ✅ AJOUT : permet d'ouvrir la page des commentaires
         />
 
         {/* ─── Modal du formulaire ─────────────────────── */}

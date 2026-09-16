@@ -1,3 +1,4 @@
+// app/(admin)/admin/y2c/membres/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -22,7 +23,6 @@ export default function Y2CMembersPage() {
   const [editingMember, setEditingMember] = useState<Y2CMember | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // ─── Chargement des membres ──────────────────────────────
   const loadMembers = useCallback(async () => {
     if (!isAuthenticated) {
       setLoading(false);
@@ -31,8 +31,6 @@ export default function Y2CMembersPage() {
     try {
       setLoading(true);
       const response = await api.get('/y2c/members');
-      
-      // Extraction correcte : le tableau est dans response.data.data.data
       const membersData = response.data?.data?.data ?? [];
       setMembers(membersData);
     } catch (error: any) {
@@ -59,7 +57,6 @@ export default function Y2CMembersPage() {
     }
   }, [authLoading, loadMembers]);
 
-  // ─── Handlers ──────────────────────────────────────────────
   const handleAdd = () => {
     setEditingMember(null);
     setIsFormOpen(true);
@@ -84,7 +81,6 @@ export default function Y2CMembersPage() {
     toast.success('✅ Liste actualisée');
   };
 
-  // ─── États de chargement / auth ──────────────────────────
   if (authLoading) {
     return (
       <PageTransition>
@@ -108,7 +104,6 @@ export default function Y2CMembersPage() {
     );
   }
 
-  // ─── Rendu principal ──────────────────────────────────────
   return (
     <PageTransition>
       <div className="space-y-6">

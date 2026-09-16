@@ -62,6 +62,9 @@ import { toast } from 'react-hot-toast';
 import { api } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
+// ✅ Imports pour l'avatar
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { buildImageUrl } from '@/lib/imageUtils';
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   ACTIVE: {
@@ -108,7 +111,6 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // ─── Rafraîchissement manuel ────────────────────────────
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
@@ -122,7 +124,6 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
     }
   };
 
-  // ─── Handlers avec refetch automatique ──────────────────
   const refetchUsers = () => {
     queryClient.invalidateQueries({ queryKey: ['users'] });
     onUserUpdated?.();
@@ -211,12 +212,25 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
       accessorFn: (row) => `${row.firstName} ${row.lastName}`,
       cell: ({ row }) => {
         const user = row.original;
+        // ✅ Construction de l'URL de l'avatar
+        const avatarUrl = user.avatar ? buildImageUrl(user.avatar, false) : null;
+        const initials = user.firstName?.charAt(0).toUpperCase() + user.lastName?.charAt(0).toUpperCase();
+
         return (
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-secondary/20 to-secondary/5 text-secondary font-semibold text-sm">
-              {user.firstName?.charAt(0).toUpperCase()}
-              {user.lastName?.charAt(0).toUpperCase()}
-            </div>
+            <Avatar className="h-9 w-9 border border-border/50">
+              <AvatarImage
+                src={avatarUrl || undefined}
+                alt={`${user.firstName} ${user.lastName}`}
+                onError={(e) => {
+                  // En cas d'erreur de chargement, on cache l'image
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <AvatarFallback className="bg-gradient-to-br from-secondary/20 to-secondary/5 text-secondary font-semibold text-sm">
+                {initials || 'U'}
+              </AvatarFallback>
+            </Avatar>
             <div className="min-w-0">
               <p className="font-medium truncate">
                 {user.firstName} {user.lastName}
@@ -404,7 +418,6 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
     },
   ];
 
-  // ─── Rendu ──────────────────────────────────────────────────
   return (
     <TooltipProvider>
       <DataTable
@@ -421,9 +434,7 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
         onRefresh={handleRefresh}
       />
 
-      {/* Dialogues... (inchangés) */}
-
-      {/* Validation */}
+      {/* ─── Dialog : Validation ───────────────────────────── */}
       <AlertDialog open={isValidateDialogOpen} onOpenChange={setIsValidateDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -442,7 +453,7 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Blocage */}
+      {/* ─── Dialog : Blocage ──────────────────────────────── */}
       <AlertDialog open={isBlockDialogOpen} onOpenChange={setIsBlockDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -468,7 +479,7 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Changement de rôle */}
+      {/* ─── Dialog : Changement de rôle ────────────────────── */}
       {isSuperAdmin && (
         <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
           <DialogContent>
@@ -497,7 +508,7 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
         </Dialog>
       )}
 
-      {/* Suppression */}
+      {/* ─── Dialog : Suppression ───────────────────────────── */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -520,14 +531,12 @@ export function UsersTable({ data, loading = false, onUserUpdated }: UsersTableP
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Formulaire */}
+      {/* ─── Formulaire d'édition ───────────────────────────── */}
       <UserForm
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         user={selectedUser || undefined}
-        onSuccess={() => {
-          refetchUsers();
-        }}
+        onSuccess={refetchUsers}
       />
     </TooltipProvider>
   );

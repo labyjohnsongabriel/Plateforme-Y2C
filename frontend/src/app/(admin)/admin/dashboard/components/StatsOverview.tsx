@@ -1,209 +1,200 @@
+// src/app/(admin)/admin/dashboard/components/StatsOverview.tsx
 'use client';
 
 import {
   Users,
   GraduationCap,
-  CalendarCheck,
   UsersRound,
-  DollarSign,
+  CalendarCheck,
   Briefcase,
+  Activity as ActivityIcon,
   FileText,
-  Activity,
-  Clock,
-  UserCheck,
-  TrendingUp,
-  TrendingDown,
+  DollarSign,
 } from 'lucide-react';
 import { StatCard } from './StatCard';
-import { Skeleton } from '@/components/ui/skeleton';
+
+// ============================================================
+// TYPES
+// ============================================================
+export interface StatsOverviewData {
+  totalUsers: number;
+  totalFormations: number;
+  totalRegistrations: number;
+  totalY2CMembers: number;
+  totalProjects: number;
+  totalEvents: number;
+  totalArticles: number;
+  revenue: number;
+  // ─── Enrichissements optionnels ───
+  recentSignups?: number;
+  pendingValidations?: number;
+  trends?: {
+    users?: number;
+    formations?: number;
+    registrations?: number;
+    y2c?: number;
+    events?: number;
+    projects?: number;
+    articles?: number;
+    revenue?: number;
+  };
+  sparklines?: {
+    users?: number[];
+    y2c?: number[];
+    revenue?: number[];
+  };
+  // ─── Options pour Progress ───
+  capacity?: {
+    formations?: number;   // Objectif / capacité (ex: 20)
+    projects?: number;     // Total visé (ex: 10)
+  };
+}
 
 interface StatsOverviewProps {
-  stats?: {
-    totalUsers: number;
-    totalFormations: number;
-    totalRegistrations: number;
-    totalY2CMembers: number;
-    totalPayments: number;
-    totalProjects: number;
-    totalEvents: number;
-    totalArticles: number;
-    revenue: number;
-    pendingValidations: number;
-    recentSignups: number;
-  };
+  stats?: StatsOverviewData;
   loading?: boolean;
 }
 
+// ============================================================
+// COMPOSANT
+// ============================================================
 export function StatsOverview({ stats, loading }: StatsOverviewProps) {
-  // Valeurs par défaut
-  const s = stats || {
-    totalUsers: 0,
-    totalFormations: 0,
-    totalRegistrations: 0,
-    totalY2CMembers: 0,
-    totalPayments: 0,
-    totalProjects: 0,
-    totalEvents: 0,
-    totalArticles: 0,
-    revenue: 0,
-    pendingValidations: 0,
-    recentSignups: 0,
+  if (!stats && !loading) return null;
+
+  // ─── Helpers ───
+  const t = stats?.trends || {};
+  const c = stats?.capacity || {};
+  const s = stats?.sparklines || {};
+
+  const safeProgress = (current: number, max?: number) => {
+    if (!max || max <= 0) return undefined;
+    return Math.min((current / max) * 100, 100);
   };
 
-  // Formatage des nombres
-  const formatNumber = (value: number): string => {
-    if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + 'M';
-    if (value >= 1_000) return (value / 1_000).toFixed(1) + 'k';
-    return value.toString();
-  };
+  const validSparkline = (data?: number[]) =>
+    data && data.length > 1 ? data : undefined;
 
-  const formatCurrency = (value: number): string => {
-    return value.toLocaleString('fr-MG') + ' Ar';
-  };
-
-  // Définition des cartes avec leurs métadonnées
   const cards = [
+    // ─── Utilisateurs ───
     {
       title: 'Utilisateurs',
-      value: s.totalUsers,
-      formatted: formatNumber(s.totalUsers),
+      value: stats?.totalUsers ?? 0,
       icon: <Users className="h-5 w-5" />,
-      trend: 8,
-      trendLabel: '+8% ce mois',
       color: 'primary' as const,
-      description: 'Comptes actifs',
+      trend: t.users,
+      description:
+        (stats?.recentSignups ?? 0) > 0
+          ? `+${stats?.recentSignups} ce mois`
+          : 'Aucun nouveau',
+      sparkline: validSparkline(s.users),
     },
+
+    // ─── Formations ───
     {
       title: 'Formations',
-      value: s.totalFormations,
-      formatted: formatNumber(s.totalFormations),
+      value: stats?.totalFormations ?? 0,
       icon: <GraduationCap className="h-5 w-5" />,
-      trend: 3,
-      trendLabel: '+3 nouvelles',
       color: 'secondary' as const,
-      description: 'Cours disponibles',
+      trend: t.formations,
+      description: 'Formations actives',
+      progress: safeProgress(stats?.totalFormations ?? 0, c.formations),
     },
+
+    // ─── Inscriptions ───
     {
       title: 'Inscriptions',
-      value: s.totalRegistrations,
-      formatted: formatNumber(s.totalRegistrations),
+      value: stats?.totalRegistrations ?? 0,
       icon: <CalendarCheck className="h-5 w-5" />,
-      trend: 12,
-      trendLabel: '+12% ce mois',
       color: 'info' as const,
-      description: 'Total des inscriptions',
+      trend: t.registrations,
+      description:
+        (stats?.pendingValidations ?? 0) > 0
+          ? `${stats?.pendingValidations} en attente`
+          : 'Toutes validées',
+      breakdown:
+        (stats?.pendingValidations ?? 0) > 0
+          ? [
+              {
+                label: 'Validées',
+                value:
+                  (stats?.totalRegistrations ?? 0) -
+                  (stats?.pendingValidations ?? 0),
+                color: 'text-emerald-600 dark:text-emerald-400',
+              },
+              {
+                label: 'En attente',
+                value: stats?.pendingValidations ?? 0,
+                color: 'text-amber-600 dark:text-amber-400',
+              },
+            ]
+          : undefined,
     },
+
+    // ─── Membres Y2C ───
     {
       title: 'Membres Y2C',
-      value: s.totalY2CMembers,
-      formatted: formatNumber(s.totalY2CMembers),
+      value: stats?.totalY2CMembers ?? 0,
       icon: <UsersRound className="h-5 w-5" />,
-      trend: 5,
-      trendLabel: '+5 nouveaux',
       color: 'success' as const,
-      description: 'Communauté active',
+      trend: t.y2c,
+      description: 'Membres actifs',
+      sparkline: validSparkline(s.y2c),
     },
-    {
-      title: 'Paiements',
-      value: s.totalPayments,
-      formatted: formatNumber(s.totalPayments),
-      icon: <DollarSign className="h-5 w-5" />,
-      trend: 7,
-      trendLabel: '+7%',
-      color: 'warning' as const,
-      description: 'Transactions réussies',
-    },
-    {
-      title: 'Projets',
-      value: s.totalProjects,
-      formatted: formatNumber(s.totalProjects),
-      icon: <Briefcase className="h-5 w-5" />,
-      trend: 2,
-      trendLabel: '+2 en cours',
-      color: 'secondary' as const,
-      description: 'Projets actifs',
-    },
+
+    // ─── Événements ───
     {
       title: 'Événements',
-      value: s.totalEvents,
-      formatted: formatNumber(s.totalEvents),
-      icon: <Activity className="h-5 w-5" />,
-      trend: 0,
-      trendLabel: 'Aucun à venir',
+      value: stats?.totalEvents ?? 0,
+      icon: <ActivityIcon className="h-5 w-5" />,
       color: 'info' as const,
-      description: 'Programmés',
+      trend: t.events,
+      description: 'Événements programmés',
     },
+
+    // ─── Projets ───
+    {
+      title: 'Projets',
+      value: stats?.totalProjects ?? 0,
+      icon: <Briefcase className="h-5 w-5" />,
+      color: 'secondary' as const,
+      trend: t.projects,
+      description: 'Projets en cours',
+      progress: safeProgress(stats?.totalProjects ?? 0, c.projects),
+    },
+
+    // ─── Articles ───
     {
       title: 'Articles',
-      value: s.totalArticles,
-      formatted: formatNumber(s.totalArticles),
+      value: stats?.totalArticles ?? 0,
       icon: <FileText className="h-5 w-5" />,
-      trend: 4,
-      trendLabel: '+4 publiés',
       color: 'primary' as const,
-      description: 'Contenu éditorial',
+      trend: t.articles,
+      description: 'Articles publiés',
     },
+
+    // ─── Revenu ───
     {
       title: 'Revenu',
-      value: s.revenue,
-      formatted: formatCurrency(s.revenue),
+      value: stats?.revenue ?? 0,
       icon: <DollarSign className="h-5 w-5" />,
-      trend: 15,
-      trendLabel: '+15%',
       color: 'success' as const,
-      description: 'Total des paiements',
-    },
-    {
-      title: 'En attente',
-      value: s.pendingValidations,
-      formatted: formatNumber(s.pendingValidations),
-      icon: <Clock className="h-5 w-5" />,
-      trend: -2,
-      trendLabel: '-2 en attente',
-      color: 'warning' as const,
-      description: 'Validations requises',
-    },
-    {
-      title: 'Nouveaux inscrits',
-      value: s.recentSignups,
-      formatted: formatNumber(s.recentSignups),
-      icon: <UserCheck className="h-5 w-5" />,
-      trend: 20,
-      trendLabel: '+20 cette semaine',
-      color: 'success' as const,
-      description: '7 derniers jours',
+      format: 'currency' as const,
+      currency: 'MGA',
+      suffix: ' Ar',
+      trend: t.revenue,
+      description: 'Revenu total',
+      sparkline: validSparkline(s.revenue),
     },
   ];
 
-  // Affichage pendant le chargement
-  if (loading) {
-    return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="rounded-xl border bg-card p-6 space-y-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-32" />
-            <Skeleton className="h-4 w-20" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, index) => (
         <StatCard
           key={card.title}
-          title={card.title}
-          value={card.formatted} // ← affiche la valeur formatée
-          icon={card.icon}
-          trend={card.trend}
-          trendLabel={card.trendLabel}
-          description={card.description}
-          color={card.color}
-          loading={false}
-          delay={index * 0.05}
+          {...card}
+          loading={loading}
+          delay={index}
         />
       ))}
     </div>
