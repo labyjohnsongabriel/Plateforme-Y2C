@@ -44,6 +44,19 @@ export interface DashboardStats {
     link?: string;
     type?: 'info' | 'success' | 'warning' | 'error';
   }>;
+  quickStats?: {
+    activeUsers: number;
+    newUsersToday: number;
+    registrationsThisWeek: number;
+    revenueThisMonth: number;
+  };
+  chartData?: Array<{
+    month: string;
+    inscriptions: number;
+    formations: number;
+    y2c: number;
+  }>;
+  roleData?: Array<{ name: string; value: number }>;
   timestamp: string;
 }
 
@@ -77,8 +90,12 @@ export function useDashboardStats() {
       setLoading(true);
       setError(null);
 
-      const response = await api.get('/dashboard/stats');
-      const rawData = response?.data?.data || response?.data || {};
+      const [statsRes, quickRes] = await Promise.all([
+        api.get('/dashboard/stats'),
+        api.get('/dashboard/quick-stats'),
+      ]);
+      const rawData = statsRes?.data?.data || statsRes?.data || {};
+      const quickRaw = quickRes?.data?.data || quickRes?.data || {};
 
       // ✅ Normalisation des activités : l'API renvoie "User" (majuscule)
       const rawActivities = Array.isArray(rawData.activities) ? rawData.activities : [];
@@ -106,10 +123,23 @@ export function useDashboardStats() {
           totalProjects: rawData.stats?.projects?.total ?? rawData.stats?.totalProjects ?? 0,
           totalEvents: rawData.stats?.events?.total ?? rawData.stats?.totalEvents ?? 0,
           totalArticles: rawData.stats?.articles?.total ?? rawData.stats?.totalArticles ?? 0,
-          revenue: rawData.stats?.payments?.revenue ?? rawData.stats?.revenue ?? 0,
-          pendingValidations: rawData.stats?.pendingValidations ?? 0,
+          revenue:
+            rawData.stats?.payments?.revenue ??
+            rawData.stats?.revenue ??
+            rawData.stats?.payments?.totalAmount ??
+            0,
+          pendingValidations:
+            rawData.stats?.pendingValidations ?? rawData.stats?.contact?.unread ?? 0,
           recentSignups: rawData.stats?.recentSignups ?? 0,
         },
+        quickStats: {
+          activeUsers: quickRaw.activeUsers ?? 0,
+          newUsersToday: quickRaw.newUsersToday ?? 0,
+          registrationsThisWeek: quickRaw.registrationsThisWeek ?? 0,
+          revenueThisMonth: quickRaw.revenueThisMonth ?? 0,
+        },
+        chartData: Array.isArray(rawData.chartData) ? rawData.chartData : [],
+        roleData: Array.isArray(rawData.roleData) ? rawData.roleData : [],
         realtime: {
           onlineUsers: rawData.realtime?.activeUsers ?? rawData.realtime?.onlineUsers ?? 0,
           todayVisits: rawData.realtime?.todayVisits ?? 0,
