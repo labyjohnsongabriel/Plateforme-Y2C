@@ -1,19 +1,81 @@
-// backend/src/routes/notification.routes.ts
-
 import { Router } from 'express';
 import { NotificationController } from '../controllers/notification.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authMiddleware } from '../middlewares/auth.middleware';
+import { isAdmin } from '../middlewares/role.middleware';
+import { validate } from '../middlewares/validate.middleware';
+import { createNotificationValidator } from '../validators/notification.validator';
 
 const router = Router();
-const notificationController = new NotificationController();
+const controller = new NotificationController();
 
-// Toutes les routes nécessitent une authentification
-router.use(authenticate);
+// ─── Routes utilisateur (authentification requise) ───────────
 
-// Routes
-router.get('/', notificationController.getMyNotifications);
-router.patch('/:id/read', notificationController.markAsRead);
-router.post('/read-all', notificationController.markAllAsRead);
-router.get('/unread-count', notificationController.getUnreadCount);
+// ✅ Route principale : s'adapte au rôle (admin voit tout, user voit ses propres notifs)
+router.get(
+  '/',
+  authMiddleware,
+  controller.getNotifications
+);
+
+// ✅ Alias pour /my-notifications (compatible avec le frontend)
+router.get(
+  '/my-notifications',
+  authMiddleware,
+  controller.getMyNotifications
+);
+
+// Route /my (alias alternatif)
+router.get(
+  '/my',
+  authMiddleware,
+  controller.getMyNotifications
+);
+
+// Nombre de non-lues
+router.get(
+  '/unread-count',
+  authMiddleware,
+  controller.getUnreadCount
+);
+
+// Marquer une notification comme lue
+router.put(
+  '/:id/read',
+  authMiddleware,
+  controller.markAsRead
+);
+
+// Marquer toutes comme lues
+router.put(
+  '/read-all',
+  authMiddleware,
+  controller.markAllAsRead
+);
+
+// Supprimer une notification (utilisateur)
+router.delete(
+  '/:id',
+  authMiddleware,
+  controller.delete
+);
+
+// ─── Routes admin ──────────────────────────────────────────────
+
+// Créer une notification (admin)
+router.post(
+  '/admin',
+  authMiddleware,
+  isAdmin,
+  validate(createNotificationValidator),
+  controller.create
+);
+
+// Supprimer n'importe quelle notification (admin)
+router.delete(
+  '/admin/:id',
+  authMiddleware,
+  isAdmin,
+  controller.deleteAdmin
+);
 
 export default router;

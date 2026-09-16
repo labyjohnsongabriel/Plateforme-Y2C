@@ -1,5 +1,7 @@
+// backend/src/repositories/notification.repository.ts
+
 import { BaseRepository } from './base.repository';
-import { Notification, Prisma } from '@prisma/client';
+import { Notification, Prisma, NotificationType } from '@prisma/client';
 
 export class NotificationRepository extends BaseRepository<
   Notification,
@@ -13,14 +15,21 @@ export class NotificationRepository extends BaseRepository<
 
   async findByUserId(
     userId: string,
-    options?: { take?: number; skip?: number }
+    options?: { take?: number; skip?: number; orderBy?: any }
   ): Promise<Notification[]> {
-    const { take = 20, skip = 0 } = options || {};
+    const { take = 20, skip = 0, orderBy = { createdAt: 'desc' } } = options || {};
     return this.findMany({
       where: { userId },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take,
       skip,
+    });
+  }
+
+  async findUnreadByUserId(userId: string): Promise<Notification[]> {
+    return this.findMany({
+      where: { userId, isRead: false },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -29,11 +38,6 @@ export class NotificationRepository extends BaseRepository<
   }
 
   async markAllAsRead(userId: string): Promise<{ count: number }> {
-    // Il faut utiliser this.updateMany ou similaire, mais BaseRepository pourrait ne pas avoir updateMany.
-    // On peut utiliser this.execute avec une transaction ou utiliser prisma directement.
-    // Mais pour simplifier, on peut utiliser prisma directement si on l'importe, mais on veut éviter.
-    // Ou on peut ajouter une méthode dans BaseRepository. Sinon, on peut utiliser this.model.updateMany.
-    // this.model est le Prisma Model, on peut faire this.model.updateMany.
     const result = await this.model.updateMany({
       where: { userId, isRead: false },
       data: { isRead: true },
@@ -43,5 +47,48 @@ export class NotificationRepository extends BaseRepository<
 
   async countUnread(userId: string): Promise<number> {
     return this.count({ userId, isRead: false });
+  }
+
+  async countByUser(userId: string): Promise<number> {
+    return this.count({ userId });
+  }
+
+  async deleteNotification(id: string): Promise<Notification> {
+    return this.delete(id);
+  }
+
+  async findAllWithFilters(filters: {
+    userId?: string;
+    type?: NotificationType;
+    isRead?: boolean;
+    startDate?: Date;
+    endDate?: Date;
+    skip?: number;
+    take?: number;
+  }): Promise<{ data: Notification[]; total: number }> {
+    const where: Prisma.NotificationWhereInput = {};
+
+    if (filters.userId) where.userId = filters.userId;
+    if (filters.type) where.type = filters.type;
+    if (filters.isRead !== undefined) where.isRead = filters.isRead;
+    if (filters.startDate) where.createdAt = { gte: filters.startDate };
+    if (filters.endDate) {
+      where.createdAt = {
+        ...(where.createdAt as any || {}),
+        lte: filters.endDate,
+      };
+    }
+
+    const [data, total] = await Promise.all([
+      this.findMany({
+        where,
+        skip: filters.skip,
+        take: filters.take,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.count(where),
+    ]);
+
+    return { data, total };
   }
 }

@@ -19,8 +19,8 @@ const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) => void)
     socket.data.userId = decoded.userId;
     socket.data.email = decoded.email;
     socket.data.role = decoded.role;
-    socket.data.firstName = 'User';
-    socket.data.lastName = 'Name';
+    socket.data.firstName = decoded.firstName || 'User';
+    socket.data.lastName = decoded.lastName || '';
     socket.data.connectedAt = new Date();
     next();
   } catch (error) {
@@ -29,22 +29,15 @@ const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) => void)
   }
 };
 
-// Handlers simplifiés
+// Handlers (existants)
 const handlePresence = (io: SocketServer, socket: Socket) => {
   const userId = socket.data.userId;
-  
   socket.on('presence:join', (_data: any) => {
     io.emit('presence:list', [{ userId, status: 'online', lastSeen: new Date() }]);
   });
-
   socket.on('presence:update', (data: any) => {
-    io.emit('presence:update', { 
-      userId, 
-      status: data?.status || 'online', 
-      lastSeen: new Date() 
-    });
+    io.emit('presence:update', { userId, status: data?.status || 'online', lastSeen: new Date() });
   });
-
   socket.on('presence:list', () => {
     socket.emit('presence:list', [{ userId, status: 'online', lastSeen: new Date() }]);
   });
@@ -58,15 +51,12 @@ const handleNotification = (io: SocketServer, socket: Socket) => {
       socket.emit('notification:ack', { success: true });
     }
   });
-
   socket.on('notification:read', (data: any) => {
     socket.emit('notification:updated', { id: data?.notificationId, isRead: true });
   });
-
   socket.on('notification:read-all', () => {
     socket.emit('notification:count', { unread: 0 });
   });
-
   socket.on('notification:count', () => {
     socket.emit('notification:count', { unread: 0 });
   });
@@ -74,7 +64,7 @@ const handleNotification = (io: SocketServer, socket: Socket) => {
 
 const handleChat = (io: SocketServer, socket: Socket) => {
   const userId = socket.data.userId;
-  const userName = `${socket.data.firstName || 'User'} ${socket.data.lastName || ''}`;
+  const userName = `${socket.data.firstName || 'User'} ${socket.data.lastName || ''}`.trim();
 
   socket.on('chat:send', (data: any) => {
     const { message, room } = data || {};
@@ -112,10 +102,7 @@ const handleAdmin = (io: SocketServer, socket: Socket) => {
         message,
         type: type || 'info',
         timestamp: new Date(),
-        admin: { 
-          id: socket.data.userId, 
-          name: `${socket.data.firstName} ${socket.data.lastName}` 
-        },
+        admin: { id: socket.data.userId, name: `${socket.data.firstName} ${socket.data.lastName}` },
       };
       if (target === 'all' || !target) {
         io.emit('broadcast:receive', broadcastData);
@@ -130,10 +117,7 @@ const handleAdmin = (io: SocketServer, socket: Socket) => {
   });
 
   socket.on('admin:stats', () => {
-    socket.emit('admin:stats', { 
-      users: { total: 0, active: 0 }, 
-      timestamp: new Date() 
-    });
+    socket.emit('admin:stats', { users: { total: 0, active: 0 }, timestamp: new Date() });
   });
 
   socket.on('admin:notification', (data: any) => {
@@ -145,10 +129,7 @@ const handleAdmin = (io: SocketServer, socket: Socket) => {
         link: link || null,
         type: 'SYSTEM',
         timestamp: new Date(),
-        fromAdmin: { 
-          id: socket.data.userId, 
-          name: `${socket.data.firstName} ${socket.data.lastName}` 
-        },
+        fromAdmin: { id: socket.data.userId, name: `${socket.data.firstName} ${socket.data.lastName}` },
       });
     }
   });
@@ -245,5 +226,3 @@ export const initializeSocket = (server: HttpServer): SocketServer => {
 };
 
 export const getIO = (): SocketServer | null => io;
-
-export default { initializeSocket, getIO };
