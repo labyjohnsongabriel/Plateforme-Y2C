@@ -1,29 +1,18 @@
+// next.config.js
 /** @type {import('next').NextConfig} */
+
+// ✅ URL du backend : priorité à la variable d'environnement, fallback sur localhost ou domaine
+const API_URL = process.env.NEXT_PUBLIC_API_URL
+  || (process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:5000' 
+    : 'https://youthcomputing.mg');
+
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
 
   images: {
-    domains: ['localhost', 'res.cloudinary.com', 'youthcomputing.mg', 'via.placeholder.com'],
-    formats: ['image/avif', 'image/webp'],
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '5000',
-        pathname: '/uploads/**',
-      },
-    ],
-  },
-
-  experimental: {
-    optimizePackageImports: ['lucide-react'],
+    unoptimized: true, // Désactive l'optimisation d'images (car elles viennent du backend)
   },
 
   async headers() {
@@ -40,15 +29,16 @@ const nextConfig = {
   },
 
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
     return [
+      // ✅ Redirige /uploads/* vers le backend (images téléchargées)
       {
         source: '/uploads/:path*',
-        destination: `${apiUrl}/uploads/:path*`,
+        destination: `${API_URL}/uploads/:path*`,
       },
+      // ✅ Redirige /api/* vers le backend (appels API)
       {
         source: '/api/:path*',
-        destination: `${apiUrl}/api/:path*`,
+        destination: `${API_URL}/api/:path*`,
       },
     ];
   },
