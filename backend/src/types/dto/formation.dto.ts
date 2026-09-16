@@ -1,6 +1,21 @@
 import { FormationLevel } from '../roles.enum';
 import { PaginationParams } from '../index';
 
+// ─── Énumérations ──────────────────────────────────────────────
+export enum PaymentMethod {
+  MOBILE_MONEY = 'mobile_money',
+  BANK_TRANSFER = 'bank_transfer',
+}
+
+export enum MobileMoneyOperator {
+  MVOLA = 'MVola',
+  AIRTEL = 'Airtel Money',
+  ORANGE = 'Orange Money',
+  TELMA = 'Telma Money',
+}
+
+// ─── Interfaces ────────────────────────────────────────────────
+
 export interface FormationDTO {
   id: string;
   title: string;
@@ -34,6 +49,7 @@ export interface FormationSessionDTO {
   createdAt: Date;
   updatedAt: Date;
 }
+
 export interface CreateFormationDTO {
   title: string;
   description: string;

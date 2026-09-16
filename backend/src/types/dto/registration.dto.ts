@@ -1,8 +1,5 @@
-// backend/src/types/dto/registration.dto.ts
-
 import { RegistrationStatus, PaymentStatus } from '@prisma/client';
 
-// ============ PAGINATION ============
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -10,7 +7,6 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-// ============ DTO PRINCIPAL ============
 export interface RegistrationDTO {
   id: string;
   sessionId: string;
@@ -27,23 +23,10 @@ export interface RegistrationDTO {
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
-  formation?: {
-    id: string;
-    title: string;
-  };
-  session?: {
-    id: string;
-    startDate: Date;
-    endDate: Date;
-    location: string;
-    formation?: {
-      id: string;
-      title: string;
-    };
-  };
+  formation?: { id: string; title: string };
+  session?: { id: string; startDate: Date; endDate: Date; location: string; formation?: { id: string; title: string } };
 }
 
-// ============ CRÉATION ============
 export interface CreateRegistrationDTO {
   sessionId: string;
   formationId?: string;
@@ -54,9 +37,9 @@ export interface CreateRegistrationDTO {
   motivation?: string;
   paymentAmount?: number;
   notes?: string;
+  paymentReference?: string;
 }
 
-// ============ MISE À JOUR ============
 export interface UpdateRegistrationDTO {
   firstName?: string;
   lastName?: string;
@@ -70,7 +53,6 @@ export interface UpdateRegistrationDTO {
   notes?: string;
 }
 
-// ============ FILTRES ============
 export interface RegistrationFilterParams extends PaginationParams {
   search?: string;
   status?: RegistrationStatus;
@@ -81,18 +63,11 @@ export interface RegistrationFilterParams extends PaginationParams {
   dateTo?: Date;
 }
 
-// ============ LISTE AVEC PAGINATION ============
 export interface RegistrationListDTO {
   registrations: RegistrationDTO[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 }
 
-// ============ STATISTIQUES ============
 export interface RegistrationStatsDTO {
   total: number;
   pending: number;
@@ -100,20 +75,13 @@ export interface RegistrationStatsDTO {
   cancelled: number;
   completed: number;
   waitingList: number;
-  byPaymentStatus: {
-    [key in PaymentStatus]?: number;
-  };
+  byPaymentStatus: { [key in PaymentStatus]?: number };
   today: number;
   thisWeek: number;
   thisMonth: number;
-  revenue: {
-    total: number;
-    paid: number;
-    pending: number;
-  };
+  revenue: { total: number; paid: number; pending: number };
 }
 
-// ============ EXPORT ============
 export interface RegistrationExportDTO {
   id: string;
   firstName: string;
@@ -128,7 +96,6 @@ export interface RegistrationExportDTO {
   registeredAt: Date;
 }
 
-// ============ BULK ============
 export interface BulkRegistrationDTO {
   registrations: CreateRegistrationDTO[];
 }
@@ -136,9 +103,5 @@ export interface BulkRegistrationDTO {
 export interface BulkRegistrationResult {
   success: number;
   failed: number;
-  errors: Array<{
-    index: number;
-    registration: CreateRegistrationDTO;
-    error: string;
-  }>;
+  errors: Array<{ index: number; registration: CreateRegistrationDTO; error: string }>;
 }
