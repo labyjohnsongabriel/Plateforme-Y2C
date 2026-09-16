@@ -5,7 +5,13 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, useInView, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
+import {
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
 
 // ============================================================
 // TYPES
@@ -39,103 +45,136 @@ export interface StatCardProps {
   currency?: string;
   suffix?: string;
   prefix?: string;
-  /** Mini-graphique (ex: [10, 25, 18, 32, 28, 40]) */
   sparkline?: number[];
-  /** Objectif / capacité (0-100) */
   progress?: number;
-  /** Badge "Nouveau" */
   isNew?: boolean;
-  /** Sous-valeurs */
   breakdown?: BreakdownItem[];
+  /** Rend la card cliquable (ex: redirection) */
+  onClick?: () => void;
 }
 
 // ============================================================
-// PALETTE
+// PALETTE PREMIUM — Couleurs + gradients + halos
 // ============================================================
-const COLOR_SCHEMES: Record<
-  StatColor,
-  {
-    iconBg: string;
-    glow: string;
-    spark: string;
-    sparkGradient: [string, string];
-    progress: string;
-    accent: string;
-  }
-> = {
+interface ColorScheme {
+  iconBg: string;
+  iconRing: string;
+  glow: string;
+  spark: string;
+  sparkGradient: [string, string];
+  progress: string;
+  progressGlow: string;
+  accent: string;
+  badge: string;
+  cornerAccent: string;
+}
+
+const COLOR_SCHEMES: Record<StatColor, ColorScheme> = {
   primary: {
-    iconBg: 'bg-primary/10 text-primary dark:bg-primary/20',
-    glow: 'from-primary/10 via-primary/5 to-transparent',
+    iconBg: 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary-foreground',
+    iconRing: 'ring-primary/20',
+    glow: 'from-primary/15 via-primary/5 to-transparent',
     spark: '#010B40',
     sparkGradient: ['#010B40', '#1a2b5c'],
-    progress: 'bg-primary',
+    progress: 'bg-gradient-to-r from-primary to-primary/70',
+    progressGlow: 'shadow-[0_0_10px_rgba(1,11,64,0.4)]',
     accent: 'text-primary',
+    badge: 'bg-primary/10 text-primary border-primary/20',
+    cornerAccent: 'bg-primary/40',
   },
   secondary: {
-    iconBg: 'bg-secondary/10 text-secondary dark:bg-secondary/20',
-    glow: 'from-secondary/10 via-secondary/5 to-transparent',
+    iconBg: 'bg-secondary/10 text-secondary dark:bg-secondary/15',
+    iconRing: 'ring-secondary/20',
+    glow: 'from-secondary/15 via-secondary/5 to-transparent',
     spark: '#F13544',
     sparkGradient: ['#F13544', '#f55a67'],
-    progress: 'bg-secondary',
+    progress: 'bg-gradient-to-r from-secondary to-secondary/70',
+    progressGlow: 'shadow-[0_0_10px_rgba(241,53,68,0.4)]',
     accent: 'text-secondary',
+    badge: 'bg-secondary/10 text-secondary border-secondary/20',
+    cornerAccent: 'bg-secondary/40',
   },
   success: {
     iconBg:
-      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400',
-    glow: 'from-emerald-500/10 via-emerald-500/5 to-transparent',
+      'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400',
+    iconRing: 'ring-emerald-500/20',
+    glow: 'from-emerald-500/15 via-emerald-500/5 to-transparent',
     spark: '#10b981',
     sparkGradient: ['#10b981', '#34d399'],
-    progress: 'bg-emerald-500',
+    progress: 'bg-gradient-to-r from-emerald-500 to-emerald-400',
+    progressGlow: 'shadow-[0_0_10px_rgba(16,185,129,0.4)]',
     accent: 'text-emerald-600 dark:text-emerald-400',
+    badge:
+      'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800',
+    cornerAccent: 'bg-emerald-500/40',
   },
   warning: {
     iconBg:
-      'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
-    glow: 'from-amber-500/10 via-amber-500/5 to-transparent',
+      'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400',
+    iconRing: 'ring-amber-500/20',
+    glow: 'from-amber-500/15 via-amber-500/5 to-transparent',
     spark: '#f59e0b',
     sparkGradient: ['#f59e0b', '#fbbf24'],
-    progress: 'bg-amber-500',
+    progress: 'bg-gradient-to-r from-amber-500 to-amber-400',
+    progressGlow: 'shadow-[0_0_10px_rgba(245,158,11,0.4)]',
     accent: 'text-amber-600 dark:text-amber-400',
+    badge:
+      'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800',
+    cornerAccent: 'bg-amber-500/40',
   },
   danger: {
     iconBg:
-      'bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400',
-    glow: 'from-red-500/10 via-red-500/5 to-transparent',
+      'bg-red-500/10 text-red-600 dark:bg-red-500/15 dark:text-red-400',
+    iconRing: 'ring-red-500/20',
+    glow: 'from-red-500/15 via-red-500/5 to-transparent',
     spark: '#ef4444',
     sparkGradient: ['#ef4444', '#f87171'],
-    progress: 'bg-red-500',
+    progress: 'bg-gradient-to-r from-red-500 to-red-400',
+    progressGlow: 'shadow-[0_0_10px_rgba(239,68,68,0.4)]',
     accent: 'text-red-600 dark:text-red-400',
+    badge:
+      'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800',
+    cornerAccent: 'bg-red-500/40',
   },
   info: {
     iconBg:
-      'bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/20 dark:text-cyan-400',
-    glow: 'from-cyan-500/10 via-cyan-500/5 to-transparent',
+      'bg-cyan-500/10 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-400',
+    iconRing: 'ring-cyan-500/20',
+    glow: 'from-cyan-500/15 via-cyan-500/5 to-transparent',
     spark: '#06b6d4',
     sparkGradient: ['#06b6d4', '#22d3ee'],
-    progress: 'bg-cyan-500',
+    progress: 'bg-gradient-to-r from-cyan-500 to-cyan-400',
+    progressGlow: 'shadow-[0_0_10px_rgba(6,182,212,0.4)]',
     accent: 'text-cyan-600 dark:text-cyan-400',
+    badge:
+      'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400 dark:border-cyan-800',
+    cornerAccent: 'bg-cyan-500/40',
   },
 };
 
 // ============================================================
-// SPARKLINE — ID unique par instance
+// SPARKLINE PREMIUM — Aire + point actif + animation
 // ============================================================
 function Sparkline({
   data,
   color,
   gradient,
   gradientId,
+  isInView,
+  delay = 0,
 }: {
   data: number[];
   color: string;
   gradient: [string, string];
   gradientId: string;
+  isInView: boolean;
+  delay?: number;
 }) {
   if (!data || data.length < 2) return null;
 
-  const width = 100;
-  const height = 32;
-  const padding = 3;
+  const width = 120;
+  const height = 36;
+  const padding = 4;
   const max = Math.max(...data);
   const min = Math.min(...data);
   const range = max - min || 1;
@@ -150,11 +189,12 @@ function Sparkline({
     .join(' ');
 
   const areaD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
+  const lastPoint = points[points.length - 1];
 
   return (
     <svg
       viewBox={`0 0 ${width} ${height}`}
-      className="h-8 w-full"
+      className="h-9 w-full"
       preserveAspectRatio="none"
       aria-hidden="true"
     >
@@ -164,22 +204,49 @@ function Sparkline({
           <stop offset="100%" stopColor={gradient[1]} stopOpacity={0} />
         </linearGradient>
       </defs>
-      <path d={areaD} fill={`url(#${gradientId})`} />
-      <path
+
+      {/* Aire de fond */}
+      <motion.path
+        d={areaD}
+        fill={`url(#${gradientId})`}
+        initial={{ opacity: 0 }}
+        animate={isInView ? { opacity: 1 } : {}}
+        transition={{ duration: 0.6, delay: delay + 0.4 }}
+      />
+
+      {/* Ligne animée */}
+      <motion.path
         d={pathD}
         fill="none"
         stroke={color}
-        strokeWidth={2}
+        strokeWidth={2.5}
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
+        initial={{ pathLength: 0 }}
+        animate={isInView ? { pathLength: 1 } : {}}
+        transition={{ duration: 1, delay: delay + 0.2, ease: 'easeOut' }}
+      />
+
+      {/* Point final (dernier point) */}
+      <motion.circle
+        cx={lastPoint.x}
+        cy={lastPoint.y}
+        r={3.5}
+        fill={color}
+        stroke="hsl(var(--background))"
+        strokeWidth={2}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={isInView ? { scale: 1, opacity: 1 } : {}}
+        transition={{ duration: 0.4, delay: delay + 1.1 }}
+        style={{ transformOrigin: `${lastPoint.x}px ${lastPoint.y}px` }}
       />
     </svg>
   );
 }
 
 // ============================================================
-// HOOK — Compteur animé (requestAnimationFrame)
+// HOOK — Compteur animé (rAF + easing outExpo)
 // ============================================================
 function useAnimatedCount(
   target: number | string,
@@ -190,13 +257,11 @@ function useAnimatedCount(
   const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
-    // Non numérique → affichage direct
     if (typeof target !== 'number') {
       setDisplay(target);
       return;
     }
 
-    // Motion réduite ou pas d'animation → valeur finale directe
     if (!enabled || prefersReducedMotion) {
       setDisplay(target);
       return;
@@ -204,19 +269,16 @@ function useAnimatedCount(
 
     const duration = 900;
     const start = performance.now();
-    const from = 0;
-    const to = target;
 
     const tick = (now: number) => {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      // Easing outExpo (animation fluide)
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setDisplay(Math.floor(from + (to - from) * eased));
+      setDisplay(Math.floor(target * eased));
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        setDisplay(to);
+        setDisplay(target);
       }
     };
 
@@ -252,16 +314,18 @@ export function StatCard({
   progress,
   isNew = false,
   breakdown,
+  onClick,
 }: StatCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: '-20px' });
-  const gradientId = useId().replace(/:/g, '-'); // ID SVG unique
+  const gradientId = useId().replace(/:/g, '-');
   const scheme = COLOR_SCHEMES[color];
 
   const isNumeric = typeof value === 'number';
   const animatedCount = useAnimatedCount(value, isInView && !loading);
+  const isInteractive = !!onClick;
 
-  // ─── Formatage mémoïsé ───
+  // ─── Formatage ───
   const formatValue = useMemo(
     () =>
       (val: number | string): string => {
@@ -305,7 +369,7 @@ export function StatCard({
   const trendNegative = trend !== undefined && trend < 0;
   const trendNeutral = trend !== undefined && trend === 0;
 
-  // ─── Loading ───
+  // ─── Loading skeleton ───
   if (loading) {
     return (
       <div
@@ -315,14 +379,14 @@ export function StatCard({
         )}
       >
         <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-8 w-28" />
-            <Skeleton className="h-3 w-32" />
+          <div className="flex-1 space-y-2.5">
+            <Skeleton className="h-2.5 w-20 rounded-full" />
+            <Skeleton className="h-8 w-28 rounded-lg" />
+            <Skeleton className="h-4 w-32 rounded-full" />
           </div>
-          <Skeleton className="h-11 w-11 rounded-xl" />
+          <Skeleton className="h-12 w-12 rounded-xl" />
         </div>
-        <Skeleton className="mt-4 h-8 w-full" />
+        <Skeleton className="mt-4 h-9 w-full rounded-lg" />
       </div>
     );
   }
@@ -333,54 +397,100 @@ export function StatCard({
       ? formatValue(animatedCount)
       : formatValue(value);
 
+  // ─── Classes dynamiques ───
+  const Wrapper = isInteractive ? motion.button : motion.div;
+
   return (
-    <motion.div
-      ref={ref}
+    <Wrapper
+      ref={ref as any}
+      type={isInteractive ? 'button' : undefined}
+      onClick={onClick}
       initial={{ opacity: 0, y: 20 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.4, delay: delay * 0.06, ease: 'easeOut' }}
+      whileHover={isInteractive ? { y: -2 } : undefined}
+      whileTap={isInteractive ? { scale: 0.99 } : undefined}
       className={cn(
-        'group relative overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm',
-        'transition-all duration-300 hover:-translate-y-0.5 hover:border-border hover:shadow-lg',
+        // Base
+        'group relative w-full overflow-hidden rounded-2xl border border-border/60 bg-card',
+        'text-left shadow-sm transition-all duration-300',
+        // Hover
+        'hover:-translate-y-0.5 hover:border-border hover:shadow-lg',
+        // Focus (accessibilité clavier)
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
     >
-      {/* ─── Glow au survol ─── */}
+      {/* ═══ Décor 1 — Glow au survol ═══ */}
       <div
         className={cn(
-          'pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-gradient-to-br opacity-0 blur-2xl transition-opacity duration-500 group-hover:opacity-100',
+          'pointer-events-none absolute -right-20 -top-20 h-48 w-48 rounded-full bg-gradient-to-br opacity-0 blur-3xl transition-opacity duration-700 group-hover:opacity-100',
           scheme.glow
         )}
         aria-hidden="true"
       />
 
-      {/* ─── Badge "Nouveau" ─── */}
+      {/* ═══ Décor 2 — Grille subtile ═══ */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.03] dark:opacity-[0.05]"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
+          backgroundSize: '16px 16px',
+        }}
+        aria-hidden="true"
+      />
+
+      {/* ═══ Décor 3 — Accent d'angle ═══ */}
+      <div
+        className={cn(
+          'pointer-events-none absolute -right-8 -top-8 h-16 w-16 rotate-45 rounded-sm opacity-0 transition-all duration-500 group-hover:opacity-100',
+          scheme.cornerAccent
+        )}
+        aria-hidden="true"
+      />
+
+      {/* ═══ Badge "Nouveau" ═══ */}
       {isNew && (
-        <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-gradient-to-r from-secondary to-secondary/80 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+        <motion.div
+          initial={{ scale: 0, rotate: -12 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{
+            type: 'spring',
+            stiffness: 400,
+            damping: 15,
+            delay: delay * 0.06 + 0.3,
+          }}
+          className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full bg-gradient-to-r from-secondary to-secondary/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-lg"
+        >
           <Sparkles className="h-2.5 w-2.5" />
-          NOUVEAU
-        </div>
+          Nouveau
+        </motion.div>
       )}
 
+      {/* ═══ Contenu ═══ */}
       <div className="relative p-5">
         {/* ─── Header ─── */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {title}
             </p>
             <p
-              className="mt-1.5 text-2xl font-bold tabular-nums leading-none tracking-tight text-foreground"
+              className="mt-1.5 text-[1.6rem] font-bold leading-none tracking-tight text-foreground tabular-nums"
               aria-label={`${title} : ${displayValue}`}
             >
               {displayValue}
             </p>
           </div>
 
+          {/* ─── Icône ─── */}
           <div
             className={cn(
-              'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110',
-              scheme.iconBg
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ring-1 transition-all duration-500',
+              'group-hover:scale-110 group-hover:rotate-3',
+              scheme.iconBg,
+              scheme.iconRing
             )}
           >
             {icon}
@@ -393,12 +503,13 @@ export function StatCard({
             {trend !== undefined && (
               <span
                 className={cn(
-                  'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-semibold tabular-nums',
+                  'inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums transition-all',
                   trendPositive &&
-                    'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400',
                   trendNegative &&
-                    'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                  trendNeutral && 'bg-muted text-muted-foreground'
+                    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400',
+                  trendNeutral &&
+                    'border-border bg-muted text-muted-foreground'
                 )}
               >
                 {trendPositive && <ArrowUp className="h-3 w-3" />}
@@ -421,6 +532,8 @@ export function StatCard({
               color={scheme.spark}
               gradient={scheme.sparkGradient}
               gradientId={`spark-${gradientId}`}
+              isInView={isInView}
+              delay={delay * 0.06}
             />
           </div>
         )}
@@ -428,14 +541,16 @@ export function StatCard({
         {/* ─── Progress bar ─── */}
         {typeof progress === 'number' && (
           <div className="mt-3">
-            <div className="mb-1 flex items-center justify-between text-[10px] font-medium">
-              <span className="text-muted-foreground">Progression</span>
-              <span className={cn('tabular-nums', scheme.accent)}>
+            <div className="mb-1.5 flex items-center justify-between text-[10px] font-medium">
+              <span className="uppercase tracking-wide text-muted-foreground">
+                Progression
+              </span>
+              <span className={cn('tabular-nums font-bold', scheme.accent)}>
                 {Math.min(Math.round(progress), 100)}%
               </span>
             </div>
             <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              className="relative h-2 w-full overflow-hidden rounded-full bg-muted/70"
               role="progressbar"
               aria-valuenow={Math.min(Math.round(progress), 100)}
               aria-valuemin={0}
@@ -453,17 +568,27 @@ export function StatCard({
                   delay: delay * 0.06 + 0.3,
                   ease: 'easeOut',
                 }}
-                className={cn('h-full rounded-full', scheme.progress)}
-              />
+                className={cn(
+                  'relative h-full rounded-full',
+                  scheme.progress,
+                  scheme.progressGlow
+                )}
+              >
+                {/* Shimmer */}
+                <div
+                  className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  aria-hidden="true"
+                />
+              </motion.div>
             </div>
           </div>
         )}
 
-        {/* ─── Breakdown (adaptatif) ─── */}
+        {/* ─── Breakdown ─── */}
         {breakdown && breakdown.length > 0 && (
           <div
             className={cn(
-              'mt-3 grid gap-2 border-t border-border/40 pt-3',
+              'mt-4 grid gap-3 border-t border-border/40 pt-3',
               breakdown.length === 1 && 'grid-cols-1',
               breakdown.length === 2 && 'grid-cols-2',
               breakdown.length === 3 && 'grid-cols-3',
@@ -477,7 +602,7 @@ export function StatCard({
                 </p>
                 <p
                   className={cn(
-                    'truncate text-sm font-semibold tabular-nums',
+                    'truncate text-sm font-bold tabular-nums',
                     item.color || 'text-foreground'
                   )}
                 >
@@ -490,6 +615,15 @@ export function StatCard({
           </div>
         )}
       </div>
-    </motion.div>
+
+      {/* ═══ Barre inférieure décorative ═══ */}
+      <div
+        className={cn(
+          'pointer-events-none absolute bottom-0 left-0 h-0.5 w-0 transition-all duration-500 group-hover:w-full',
+          scheme.progress
+        )}
+        aria-hidden="true"
+      />
+    </Wrapper>
   );
 }
