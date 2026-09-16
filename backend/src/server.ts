@@ -1,50 +1,72 @@
-// src/server.ts
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
+import { logger } from './config/logger';
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 import App from './app';
-import { logger } from './config/logger';
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
+
+process.on('uncaughtException', (error) => {
+  logger.error('💥 Uncaught Exception:', error);
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('💥 Unhandled Rejection:', reason);
+});
 
 async function startServer() {
   try {
-    console.log('🔍 Environnement:', {
-      NODE_ENV: process.env.NODE_ENV || 'development',
-      PORT,
-      HOST,
-      DATABASE_URL: process.env.DATABASE_URL ? '✅ Définie' : '❌ Non définie',
-    });
+    console.log('\n🔍 Environnement:');
+    console.log(`   NODE_ENV      : ${process.env.NODE_ENV || 'development'}`);
+    console.log(`   PORT          : ${PORT}`);
+    console.log(`   HOST          : ${HOST}`);
+    console.log(`   DATABASE_URL  : ${process.env.DATABASE_URL ? '✅ Définie' : '❌ Non définie'}`);
+    console.log(`   JWT_SECRET    : ${process.env.JWT_SECRET ? '✅ Défini' : '❌ Non défini'}`);
+    console.log(`   FRONTEND_URL  : ${process.env.FRONTEND_URL || 'http://localhost:3100'}\n`);
+
+    const uploadsPath = path.join(__dirname, '../uploads');
+    if (!fs.existsSync(uploadsPath)) {
+      fs.mkdirSync(uploadsPath, { recursive: true });
+    }
+    const publicImagesPath = path.join(__dirname, '../public/images');
+    if (!fs.existsSync(publicImagesPath)) {
+      fs.mkdirSync(publicImagesPath, { recursive: true });
+    }
 
     const app = new App();
     const server = app.getServer();
 
     server.listen(PORT, HOST, () => {
-      logger.info(`🚀 Server running on http://${HOST}:${PORT}`);
-      logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`📦 Database: ${process.env.DATABASE_URL ? '✅ Configurée' : '❌ Non configurée'}`);
+      logger.info(`🚀 Serveur démarré sur http://${HOST}:${PORT}`);
+      logger.info(`🌍 Environnement : ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`📦 Base de données : ${process.env.DATABASE_URL ? '✅ Connectée' : '❌ Non configurée'}`);
+      logger.info(`📁 Uploads : ${uploadsPath}`);
     });
 
     const shutdown = async (signal: string) => {
-      logger.info(`🛑 Received ${signal}, shutting down...`);
+      logger.info(`🛑 Signal ${signal} reçu, arrêt en cours...`);
       server.close(() => {
-        logger.info('👋 Server closed');
+        logger.info('👋 Serveur arrêté proprement');
         process.exit(0);
       });
       setTimeout(() => {
-        logger.error('💥 Forcefully shutting down');
+        logger.error('💥 Arrêt forcé après 10 secondes');
         process.exit(1);
       }, 10000);
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
+
+    console.log(`\n✅ Serveur prêt - ${new Date().toISOString()}\n`);
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    logger.error('❌ Failed to start server:', error);
+    console.error('❌ Échec du démarrage du serveur:', error);
+    logger.error('❌ Échec du démarrage du serveur:', error);
     process.exit(1);
   }
 }
