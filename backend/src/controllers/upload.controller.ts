@@ -1,80 +1,71 @@
-import { Request, Response, NextFunction } from 'express';
-import { BaseController } from './base.controller';
-import { FileService } from '../services/file.service';
-import { AuthRequest } from '../middlewares/auth.middleware';
+import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 
-export class UploadController extends BaseController {
-  private fileService: FileService;
-
-  constructor() {
-    super();
-    this.fileService = new FileService();
+export class UploadController {
+  // Upload d'un seul fichier
+  async uploadSingle(req: Request, res: Response) {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier reçu' });
+    }
+    // ✅ Renvoyer le chemin relatif
+    const filePath = `/uploads/${req.file.filename}`;
+    return res.status(201).json({
+      success: true,
+      data: {
+        url: filePath,
+        filename: req.file.filename,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      },
+    });
   }
 
-  uploadSingle = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      if (!req.file) {
-        throw new Error('No file uploaded');
-      }
-
-      const userId = req.user?.id;
-      if (!userId) {
-        throw new Error('User not authenticated');
-      }
-
-      // ✅ Le service retourne déjà un objet avec l'URL absolue
-      const result = await this.fileService.uploadFile(req.file, userId);
-      this.sendCreated(res, result);
-    } catch (error) {
-      this.handleError(next, error);
+  // Upload multiple
+  async uploadMultiple(req: Request, res: Response) {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'Aucun fichier reçu' });
     }
-  };
+    const fileData = files.map(file => ({
+      url: `/uploads/${file.filename}`,
+      filename: file.filename,
+      originalName: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype,
+    }));
+    return res.status(201).json({ success: true, data: fileData });
+  }
 
-  uploadMultiple = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      if (!req.files || !Array.isArray(req.files)) {
-        throw new Error('No files uploaded');
-      }
-
-      const userId = req.user?.id;
-      if (!userId) {
-        throw new Error('User not authenticated');
-      }
-
-      const results = await this.fileService.uploadMultipleFiles(req.files, userId);
-      this.sendCreated(res, results);
-    } catch (error) {
-      this.handleError(next, error);
+  // Supprimer un fichier
+  async deleteFile(req: Request, res: Response) {
+    const { id } = req.params;
+    const filePath = path.join(__dirname, '../../uploads', id);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Fichier introuvable' });
     }
-  };
+    fs.unlinkSync(filePath);
+    return res.status(200).json({ success: true, message: 'Fichier supprimé' });
+  }
 
-  deleteFile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { id } = req.params;
-      await this.fileService.deleteFile(id);
-      this.sendDeleted(res, null);
-    } catch (error) {
-      this.handleError(next, error);
-    }
-  };
+  // Récupérer la liste des fichiers (optionnel)
+  async getFiles(req: Request, res: Response) {
+    const dir = path.join(__dirname, '../../uploads');
+    const files = fs.readdirSync(dir).map(filename => ({
+      filename,
+      url: `/uploads/${filename}`,
+    }));
+    return res.status(200).json({ success: true, data: files });
+  }
 
-  getFiles = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const pagination = this.getPaginationParams(req);
-      const files = await this.fileService.getFiles(pagination);
-      this.sendSuccess(res, files);
-    } catch (error) {
-      this.handleError(next, error);
+  // Récupérer un fichier (optionnel)
+  async getFile(req: Request, res: Response) {
+    const { id } = req.params;
+    const filePath = path.join(__dirname, '../../uploads', id);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: 'Fichier introuvable' });
     }
-  };
-
-  getFile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const file = await this.fileService.getFile(id);
-      this.sendSuccess(res, file);
-    } catch (error) {
-      this.handleError(next, error);
-    }
-  };
+    return res.sendFile(filePath);
+  }
 }
