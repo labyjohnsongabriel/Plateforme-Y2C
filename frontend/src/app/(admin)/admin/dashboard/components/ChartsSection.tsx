@@ -18,7 +18,6 @@ import {
   Pie,
   Cell,
   Legend,
-  ReferenceLine,
   LabelList,
 } from 'recharts';
 import { motion } from 'framer-motion';
@@ -30,10 +29,11 @@ import {
   TrendingUp,
   GraduationCap,
   UsersRound,
-  Users,
   BarChart3,
   Award,
+  Users,
   Target,
+  Percent,
 } from 'lucide-react';
 
 // ============================================================
@@ -62,15 +62,41 @@ export interface ChartsSectionProps {
 // ============================================================
 // PALETTE PROFESSIONNELLE (charte Y2C)
 // ============================================================
-const COLORS = [
-  '#010B40',
-  '#F13544',
-  '#0ea5e9',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#6b7280',
+const ROLE_COLORS = [
+  '#010B40', // Bleu nuit principal
+  '#F13544', // Rouge secondaire
+  '#0ea5e9', // Cyan
+  '#10b981', // Émeraude
+  '#f59e0b', // Ambre
+  '#8b5cf6', // Violet
+  '#6b7280', // Gris
+  '#ec4899', // Rose
 ];
+
+// Noms français des rôles
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Administrateur',
+  EDITOR: 'Éditeur',
+  CONTRIBUTOR: 'Contributeur',
+  MEMBER: 'Membre',
+  VIEWER: 'Lecteur',
+  USER: 'Utilisateur',
+};
+
+// ============================================================
+// HELPER — Toujours un tableau
+// ============================================================
+function asArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && typeof value === 'object') {
+    const obj = value as any;
+    if (Array.isArray(obj.data)) return obj.data;
+    if (Array.isArray(obj.items)) return obj.items;
+    if (Array.isArray(obj.results)) return obj.results;
+  }
+  return [];
+}
 
 // ============================================================
 // TOOLTIP PREMIUM
@@ -89,10 +115,7 @@ const PremiumTooltip = ({ active, payload, label }: any) => {
       </p>
       <div className="space-y-1.5">
         {payload.map((entry: any, index: number) => (
-          <div
-            key={index}
-            className="flex items-center gap-2.5 text-sm"
-          >
+          <div key={index} className="flex items-center gap-2.5 text-sm">
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background"
               style={{ backgroundColor: entry.color || entry.fill }}
@@ -111,13 +134,85 @@ const PremiumTooltip = ({ active, payload, label }: any) => {
 };
 
 // ============================================================
+// RENDU LABEL PIE — Avec lignes de connexion
+// ============================================================
+const RADIAN = Math.PI / 180;
+
+function renderPieLabel({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+  name,
+  value,
+  index,
+}: any) {
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+
+  const sx = cx + (outerRadius + 8) * cos;
+  const sy = cy + (outerRadius + 8) * sin;
+  const mx = cx + (outerRadius + 24) * cos;
+  const my = cy + (outerRadius + 24) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 18;
+  const ey = my;
+  const textAnchor = cos >= 0 ? 'start' : 'end';
+
+  // Ne pas afficher si trop petit (< 3%)
+  if (percent < 0.03) return null;
+
+  const color = ROLE_COLORS[index % ROLE_COLORS.length];
+  const roleLabel = ROLE_LABELS[name] || name;
+
+  return (
+    <g>
+      {/* Ligne extérieure */}
+      <path
+        d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`}
+        stroke={color}
+        strokeWidth={1.5}
+        fill="none"
+        strokeLinecap="round"
+      />
+      {/* Point de connexion */}
+      <circle cx={sx} cy={sy} r={2.5} fill={color} />
+      {/* Texte nom du rôle */}
+      <text
+        x={ex + (cos >= 0 ? 1 : -1) * 6}
+        y={ey}
+        textAnchor={textAnchor}
+        fill="hsl(var(--foreground))"
+        fontSize={11}
+        fontWeight={700}
+      >
+        {roleLabel}
+      </text>
+      {/* Texte pourcentage */}
+      <text
+        x={ex + (cos >= 0 ? 1 : -1) * 6}
+        y={ey + 14}
+        textAnchor={textAnchor}
+        fill="hsl(var(--muted-foreground))"
+        fontSize={10}
+        fontWeight={500}
+      >
+        {`${(percent * 100).toFixed(0)}% · ${value}`}
+      </text>
+    </g>
+  );
+}
+
+// ============================================================
 // COMPOSANT PRINCIPAL
 // ============================================================
 export function ChartsSection({ stats, loading }: ChartsSectionProps) {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('30d');
 
-  const chartData: ChartData[] = stats?.chartData || [];
-  const roleData: RoleData[] = stats?.roleData || [];
+  // ✅ Toujours des tableaux
+  const chartData = useMemo(() => asArray<ChartData>(stats?.chartData), [stats]);
+  const roleData = useMemo(() => asArray<RoleData>(stats?.roleData), [stats]);
 
   const hasChartData = chartData.length > 0;
   const hasRoleData = roleData.length > 0;
@@ -128,18 +223,25 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
     return chartData.slice(-Math.min(limit, chartData.length));
   }, [chartData, period]);
 
+  // ─── Total utilisateurs ───
+  const totalUsers = useMemo(
+    () => roleData.reduce((s, d) => s + (d.value || 0), 0),
+    [roleData]
+  );
+
   // ─── Stats calculées ───
   const statsCalc = useMemo(() => {
     const data = filteredChartData;
-    if (!data.length)
+    if (!data.length) {
       return {
         inscriptions: { avg: 0, total: 0, last: 0, max: 0 },
         formations: { avg: 0, total: 0, last: 0, max: 0 },
         y2c: { avg: 0, total: 0, last: 0, max: 0 },
       };
+    }
 
     const calc = (key: keyof Omit<ChartData, 'month'>) => {
-      const values = data.map((d) => d[key] as number);
+      const values = data.map((d) => Number(d[key]) || 0);
       const total = values.reduce((s, v) => s + v, 0);
       return {
         avg: total / values.length,
@@ -161,7 +263,7 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-[420px] w-full rounded-2xl" />
-        <Skeleton className="h-[380px] w-full rounded-2xl" />
+        <Skeleton className="h-[460px] w-full rounded-2xl" />
       </div>
     );
   }
@@ -236,10 +338,7 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                 subtitle="Nombre de formations créées sur la période"
                 icon={<GraduationCap className="h-4 w-4" />}
                 metrics={[
-                  {
-                    label: 'Total',
-                    value: statsCalc.formations.total,
-                  },
+                  { label: 'Total', value: statsCalc.formations.total },
                   {
                     label: 'Moyenne',
                     value: statsCalc.formations.avg.toFixed(1),
@@ -270,7 +369,6 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                     margin={{ top: 30, right: 15, left: -10, bottom: 0 }}
                   >
                     <defs>
-                      {/* Gradient principal */}
                       <linearGradient
                         id="gradFormations"
                         x1="0"
@@ -278,11 +376,7 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                         x2="0"
                         y2="1"
                       >
-                        <stop
-                          offset="0%"
-                          stopColor="#F13544"
-                          stopOpacity={1}
-                        />
+                        <stop offset="0%" stopColor="#F13544" stopOpacity={1} />
                         <stop
                           offset="50%"
                           stopColor="#F13544"
@@ -294,7 +388,6 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                           stopOpacity={0.5}
                         />
                       </linearGradient>
-                      {/* Gradient pour la barre max */}
                       <linearGradient
                         id="gradFormationsHighlight"
                         x1="0"
@@ -302,11 +395,7 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                         x2="0"
                         y2="1"
                       >
-                        <stop
-                          offset="0%"
-                          stopColor="#010B40"
-                          stopOpacity={1}
-                        />
+                        <stop offset="0%" stopColor="#010B40" stopOpacity={1} />
                         <stop
                           offset="100%"
                           stopColor="#1a2b5c"
@@ -350,22 +439,6 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                         fill: '#F13544',
                         fillOpacity: 0.06,
                         radius: 8,
-                      }}
-                    />
-
-                    {/* Ligne moyenne */}
-                    <ReferenceLine
-                      y={statsCalc.formations.avg}
-                      stroke="#010B40"
-                      strokeDasharray="4 4"
-                      strokeOpacity={0.5}
-                      strokeWidth={1.5}
-                      label={{
-                        value: `Moy: ${statsCalc.formations.avg.toFixed(1)}`,
-                        position: 'insideTopRight',
-                        fontSize: 10,
-                        fill: '#010B40',
-                        fontWeight: 600,
                       }}
                     />
 
@@ -490,14 +563,6 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                       }}
                     />
 
-                    <ReferenceLine
-                      y={statsCalc.inscriptions.avg}
-                      stroke="#F13544"
-                      strokeDasharray="4 4"
-                      strokeOpacity={0.6}
-                      strokeWidth={1.5}
-                    />
-
                     <Area
                       type="monotone"
                       dataKey="inscriptions"
@@ -512,7 +577,18 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                         fill: '#010B40',
                       }}
                       animationDuration={800}
-                    />
+                    >
+                      <LabelList
+                        dataKey="inscriptions"
+                        position="top"
+                        offset={10}
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          fill: 'hsl(var(--foreground))',
+                        }}
+                      />
+                    </Area>
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -578,14 +654,6 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
                       }}
                     />
 
-                    <ReferenceLine
-                      y={statsCalc.y2c.avg}
-                      stroke="#F13544"
-                      strokeDasharray="4 4"
-                      strokeOpacity={0.6}
-                      strokeWidth={1.5}
-                    />
-
                     <Line
                       type="monotone"
                       dataKey="y2c"
@@ -616,25 +684,35 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
 
       {/* ═══════════════ RÉPARTITION DES RÔLES ═══════════════ */}
       <Card className="overflow-hidden border-border/60 shadow-sm">
-        <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-5 py-3">
+        {/* ─── Header ─── */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 bg-muted/30 px-5 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Award className="h-3.5 w-3.5" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/15 to-secondary/15 text-primary">
+              <Award className="h-4 w-4" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold">Répartition des rôles</h3>
+              <h3 className="text-sm font-semibold">
+                Répartition des rôles
+              </h3>
               <p className="text-xs text-muted-foreground">
-                Distribution des utilisateurs
+                Distribution des utilisateurs par type de compte
               </p>
             </div>
           </div>
           {hasRoleData && (
-            <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
-              {roleData.reduce((s, d) => s + d.value, 0)} utilisateurs
-            </span>
+            <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1">
+              <Users className="h-3 w-3 text-primary" />
+              <span className="text-[11px] font-bold tabular-nums text-primary">
+                {totalUsers.toLocaleString('fr-FR')}
+              </span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-primary/80">
+                utilisateur{totalUsers > 1 ? 's' : ''}
+              </span>
+            </div>
           )}
         </div>
 
+        {/* ─── Body ─── */}
         <div className="p-5">
           {!hasRoleData ? (
             <EmptyState
@@ -643,44 +721,126 @@ export function ChartsSection({ stats, loading }: ChartsSectionProps) {
               compact
             />
           ) : (
-            <div className="h-80 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={roleData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
-                    outerRadius={100}
-                    innerRadius={55}
-                    paddingAngle={4}
-                    dataKey="value"
-                    stroke="hsl(var(--background))"
-                    strokeWidth={3}
-                    animationDuration={800}
-                  >
-                    {roleData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={COLORS[index % COLORS.length]}
+            <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+              {/* ─── Graphique Donut ─── */}
+              <div className="h-[380px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <defs>
+                      {ROLE_COLORS.map((color, i) => (
+                        <radialGradient
+                          key={i}
+                          id={`roleGradient-${i}`}
+                          cx="50%"
+                          cy="50%"
+                          r="50%"
+                        >
+                          <stop offset="0%" stopColor={color} stopOpacity={1} />
+                          <stop
+                            offset="100%"
+                            stopColor={color}
+                            stopOpacity={0.75}
+                          />
+                        </radialGradient>
+                      ))}
+                    </defs>
+
+                    <Pie
+                      data={roleData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={renderPieLabel}
+                      outerRadius={100}
+                      innerRadius={60}
+                      paddingAngle={3}
+                      dataKey="value"
+                      stroke="hsl(var(--background))"
+                      strokeWidth={3}
+                      animationDuration={800}
+                    >
+                      {roleData.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={`url(#roleGradient-${index % ROLE_COLORS.length})`}
+                        />
+                      ))}
+                    </Pie>
+
+                    <Tooltip content={<PremiumTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* ─── Légende Détaillée ─── */}
+              <div className="flex flex-col justify-center space-y-2">
+                <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <Percent className="h-3 w-3" />
+                  <span>Détail par rôle</span>
+                </div>
+
+                {roleData.map((role, index) => {
+                  const percent =
+                    totalUsers > 0 ? (role.value / totalUsers) * 100 : 0;
+                  const color = ROLE_COLORS[index % ROLE_COLORS.length];
+                  const label = ROLE_LABELS[role.name] || role.name;
+
+                  return (
+                    <motion.div
+                      key={role.name}
+                      initial={{ opacity: 0, x: 10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="group flex items-center gap-3 rounded-lg border border-transparent p-2 transition-all hover:border-border/60 hover:bg-muted/40"
+                    >
+                      {/* Point coloré */}
+                      <span
+                        className="h-3 w-3 shrink-0 rounded-full ring-2 ring-background transition-transform group-hover:scale-125"
+                        style={{
+                          backgroundColor: color,
+                          boxShadow: `0 0 8px ${color}60`,
+                        }}
                       />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<PremiumTooltip />} />
-                  <Legend
-                    verticalAlign="bottom"
-                    iconType="circle"
-                    formatter={(value) => (
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {value}
-                      </span>
-                    )}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+
+                      {/* Nom */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-semibold text-foreground">
+                          {label}
+                        </p>
+                        <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted/60">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${percent}%` }}
+                            transition={{ duration: 0.8, delay: index * 0.05 }}
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: color }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Valeur */}
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-bold tabular-nums text-foreground">
+                          {role.value}
+                        </p>
+                        <p className="text-[10px] font-medium text-muted-foreground tabular-nums">
+                          {percent.toFixed(0)}%
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+
+                {/* Total */}
+                <div className="mt-2 flex items-center justify-between border-t border-border/40 pt-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Total
+                  </span>
+                  <span className="text-sm font-bold tabular-nums text-primary">
+                    {totalUsers.toLocaleString('fr-FR')}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -712,18 +872,14 @@ const ACCENT_MAP = {
   primary: {
     iconBg: 'bg-primary/10 text-primary',
     highlight: 'text-primary',
-    badge: 'bg-primary/10 text-primary border-primary/20',
   },
   secondary: {
     iconBg: 'bg-secondary/10 text-secondary',
     highlight: 'text-secondary',
-    badge: 'bg-secondary/10 text-secondary border-secondary/20',
   },
   success: {
     iconBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     highlight: 'text-emerald-600 dark:text-emerald-400',
-    badge:
-      'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400',
   },
 };
 
@@ -740,7 +896,7 @@ function ChartCard({
 
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm transition-shadow hover:shadow-md">
-      {/* ─── Header ─── */}
+      {/* Header */}
       <div className="border-b border-border/50 bg-muted/30 px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -753,9 +909,7 @@ function ChartCard({
               {icon}
             </div>
             <div>
-              <h3 className="text-sm font-semibold leading-tight">
-                {title}
-              </h3>
+              <h3 className="text-sm font-semibold leading-tight">{title}</h3>
               {subtitle && (
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {subtitle}
@@ -764,16 +918,13 @@ function ChartCard({
             </div>
           </div>
 
-          {/* ─── Métriques inline ─── */}
+          {/* Métriques inline */}
           {metrics && metrics.length > 0 && (
             <div className="flex items-center gap-4 text-xs">
               {metrics.map((metric, idx) => (
                 <div key={metric.label} className="flex items-center gap-3">
                   {idx > 0 && (
-                    <div
-                      className="h-8 w-px bg-border/60"
-                      aria-hidden="true"
-                    />
+                    <div className="h-8 w-px bg-border/60" aria-hidden="true" />
                   )}
                   <div className="text-right">
                     <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -799,10 +950,10 @@ function ChartCard({
         </div>
       </div>
 
-      {/* ─── Zone graphique ─── */}
+      {/* Zone graphique */}
       <div className="h-[380px] w-full p-4">{children}</div>
 
-      {/* ─── Footer ─── */}
+      {/* Footer */}
       {footer && (
         <div className="border-t border-border/40 bg-muted/20 px-5 py-2.5">
           {footer}
