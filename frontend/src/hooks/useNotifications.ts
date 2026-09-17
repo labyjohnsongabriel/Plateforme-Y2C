@@ -1,7 +1,7 @@
 // src/hooks/useNotifications.ts
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/hooks/useSocket';
 
 // ============================================================
@@ -25,52 +25,58 @@ interface UseNotificationsOptions {
 }
 
 // ============================================================
-// HELPER — Normalise la réponse en tableau
+// HELPER — Normalise en tableau
 // ============================================================
-function normalizeNotifications(raw: unknown): Notification[] {
+function normalizeToArray(raw: unknown): Notification[] {
   if (!raw) return [];
-
-  // ✅ Cas 1 : déjà un tableau
   if (Array.isArray(raw)) return raw as Notification[];
-
-  // ✅ Cas 2 : objet avec clé "data"
   if (typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>;
-
-    if (Array.isArray(obj.data)) return obj.data as Notification[];
-    if (Array.isArray(obj.notifications))
-      return obj.notifications as Notification[];
-    if (Array.isArray(obj.items)) return obj.items as Notification[];
-    if (Array.isArray(obj.results)) return obj.results as Notification[];
-
-    // Cas 2b : objet paginé { data: { notifications: [...] } }
-    if (obj.data && typeof obj.data === 'object') {
-      const nested = obj.data as Record<string, unknown>;
-      if (Array.isArray(nested.notifications))
-        return nested.notifications as Notification[];
-      if (Array.isArray(nested.items)) return nested.items as Notification[];
+    const obj = raw as any;
+    if (Array.isArray(obj.data)) return obj.data;
+    if (Array.isArray(obj.notifications)) return obj.notifications;
+    if (Array.isArray(obj.items)) return obj.items;
+    if (obj.data && Array.isArray(obj.data.notifications)) {
+      return obj.data.notifications;
+    }
+    if (obj.data && Array.isArray(obj.data.items)) {
+      return obj.data.items;
     }
   }
-
-  // ⚠️ Rien de reconnu → tableau vide
-  console.warn('[useNotifications] Format inattendu:', raw);
   return [];
 }
 
 // ============================================================
-// HOOK
+// HOOK — ORDRE DES HOOKS STABLE (ne jamais modifier)
 // ============================================================
 export function useNotifications({
   fetcher,
   pollInterval = 30_000,
   eventName = 'notification',
 }: UseNotificationsOptions = {}) {
-  const { on, off, isConnected } = useSocket();
+  // ═══════════════════════════════════════════════════════════
+  // ORDRE FIXE DES HOOKS — NE PAS INTERCALER DE HOOK ICI
+  // ═══════════════════════════════════════════════════════════
 
+  // 1. Hook du SocketContext (retourne toujours 1 useContext)
+  const socketCtx = useSocket();
+
+  // 2. États (toujours dans le même ordre)
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // ─── Chargement initial REST ───
+  // 3. Refs
+  const isMountedRef = useRef(true);
+
+  // 4. Effet : gestion du montage
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // 5. Effet : chargement initial REST
   useEffect(() => {
     if (!fetcher) {
       setLoading(false);
@@ -79,32 +85,40 @@ export function useNotifications({
 
     let cancelled = false;
 
-    const load = async () => {
+    (async () => {
       try {
+        setError(null);
         const raw = await fetcher();
-        const data = normalizeNotifications(raw);
-        if (!cancelled) setNotifications(data);
-      } catch (err) {
-        console.error('[useNotifications] fetch:', err);
-        if (!cancelled) setNotifications([]);
+        const data = normalizeToArray(raw);
+        if (!cancelled && isMountedRef.current) {
+          setNotifications(data);
+        }
+      } catch (err: any) {
+        if (!cancelled && isMountedRef.current) {
+          setError(err?.message || 'Erreur');
+          setNotifications([]);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && isMountedRef.current) {
+          setLoading(false);
+        }
       }
-    };
-
-    load();
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [fetcher]);
 
-  // ─── Live socket ───
+  // 6. Effet : écoute Socket.IO
+  //    ⚠️ Extrait `on`, `off`, `isConnected` AVANT pour stabiliser les deps
+  const { on, off, isConnected } = socketCtx;
+
   useEffect(() => {
     if (!isConnected) return;
 
     const handleNew = (n: Notification) => {
-      if (!n || !n.id) return;
+      if (!n?.id) return;
       setNotifications((prev) => {
         const arr = Array.isArray(prev) ? prev : [];
         if (arr.some((x) => x.id === n.id)) return arr;
@@ -128,31 +142,37 @@ export function useNotifications({
       });
     };
 
+    // Écoute plusieurs alias
     on(eventName, handleNew);
+    on('notification', handleNew);
+    on('notification:receive', handleNew);
+    on('new-notification', handleNew);
     on(`${eventName}:update`, handleUpdate);
-    on(`${eventName}:delete`, handleDelete);
-    on('notification:receive', handleNew); // alias
     on('notification:updated', handleUpdate);
+    on(`${eventName}:delete`, handleDelete);
     on('notification:delete', handleDelete);
 
     return () => {
       off(eventName, handleNew);
-      off(`${eventName}:update`, handleUpdate);
-      off(`${eventName}:delete`, handleDelete);
+      off('notification', handleNew);
       off('notification:receive', handleNew);
+      off('new-notification', handleNew);
+      off(`${eventName}:update`, handleUpdate);
       off('notification:updated', handleUpdate);
+      off(`${eventName}:delete`, handleDelete);
       off('notification:delete', handleDelete);
     };
-  }, [isConnected, eventName, on, off]);
+  }, [isConnected, on, off, eventName]);
 
-  // ─── Polling fallback si socket down ───
+  // 7. Effet : polling fallback
   useEffect(() => {
     if (isConnected || !fetcher || pollInterval <= 0) return;
 
     const interval = setInterval(async () => {
       try {
         const raw = await fetcher();
-        setNotifications(normalizeNotifications(raw));
+        const data = normalizeToArray(raw);
+        if (isMountedRef.current) setNotifications(data);
       } catch {
         /* ignore */
       }
@@ -161,39 +181,56 @@ export function useNotifications({
     return () => clearInterval(interval);
   }, [isConnected, fetcher, pollInterval]);
 
-  // ─── Actions ───
+  // 8. Callbacks (ordre stable)
   const markAsRead = useCallback((id: string) => {
-    setNotifications((prev) => {
-      const arr = Array.isArray(prev) ? prev : [];
-      return arr.map((n) => (n.id === id ? { ...n, read: true } : n));
-    });
+    setNotifications((prev) =>
+      (Array.isArray(prev) ? prev : []).map((n) =>
+        n.id === id ? { ...n, read: true } : n
+      )
+    );
   }, []);
 
   const markAllAsRead = useCallback(() => {
-    setNotifications((prev) => {
-      const arr = Array.isArray(prev) ? prev : [];
-      return arr.map((n) => ({ ...n, read: true }));
-    });
+    setNotifications((prev) =>
+      (Array.isArray(prev) ? prev : []).map((n) => ({ ...n, read: true }))
+    );
   }, []);
 
   const remove = useCallback((id: string) => {
-    setNotifications((prev) => {
-      const arr = Array.isArray(prev) ? prev : [];
-      return arr.filter((n) => n.id !== id);
-    });
+    setNotifications((prev) =>
+      (Array.isArray(prev) ? prev : []).filter((n) => n.id !== id)
+    );
   }, []);
 
-  // ─── Sécurité : toujours un tableau ───
+  const refetch = useCallback(async () => {
+    if (!fetcher) return;
+    setLoading(true);
+    try {
+      const raw = await fetcher();
+      setNotifications(normalizeToArray(raw));
+    } catch (err) {
+      console.error('[useNotifications] refetch error:', err);
+    } finally {
+      if (isMountedRef.current) setLoading(false);
+    }
+  }, [fetcher]);
+
+  // ═══════════════════════════════════════════════════════════
+  // PAS DE HOOK APRÈS CETTE LIGNE
+  // ═══════════════════════════════════════════════════════════
+
   const safeNotifications = Array.isArray(notifications) ? notifications : [];
   const unreadCount = safeNotifications.filter((n) => !n.read).length;
 
   return {
     notifications: safeNotifications,
     loading,
+    error,
     isConnected,
     unreadCount,
     markAsRead,
     markAllAsRead,
     remove,
+    refetch,
   };
 }
