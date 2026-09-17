@@ -18,10 +18,7 @@ import {
   ChevronRight,
   BellOff,
   Trash2,
-  Check,
   CheckCheck,
-  Filter,
-  Inbox,
   Sparkles,
 } from 'lucide-react';
 import { cn, formatTimeAgo } from '@/lib/utils';
@@ -36,9 +33,8 @@ type NotificationType = 'info' | 'success' | 'warning' | 'error';
 type FilterType = 'all' | NotificationType | 'unread';
 
 interface NotificationsPanelProps {
-  fetcher?: () => Promise<Notification[]>;
+  fetcher?: () => Promise<unknown>;
   eventName?: string;
-  /** Nombre max de notifications affichées quand réduit */
   collapsedLimit?: number;
 }
 
@@ -86,21 +82,25 @@ const TYPE_CONFIG: Record<
 };
 
 // ============================================================
-// HELPERS — Groupement par date
+// HELPERS
 // ============================================================
 function getDateGroup(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const weekAgo = new Date(today);
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
 
-  if (date >= today) return "Aujourd'hui";
-  if (date >= yesterday) return 'Hier';
-  if (date >= weekAgo) return 'Cette semaine';
-  return 'Plus ancien';
+    if (date >= today) return "Aujourd'hui";
+    if (date >= yesterday) return 'Hier';
+    if (date >= weekAgo) return 'Cette semaine';
+    return 'Plus ancien';
+  } catch {
+    return 'Plus ancien';
+  }
 }
 
 const GROUP_ORDER = [
@@ -110,6 +110,12 @@ const GROUP_ORDER = [
   'Plus ancien',
 ] as const;
 
+// ✅ Normalise en tableau (sécurité)
+function toArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  return [];
+}
+
 // ============================================================
 // COMPOSANT PRINCIPAL
 // ============================================================
@@ -118,10 +124,20 @@ export function NotificationsPanel({
   eventName = 'notification',
   collapsedLimit = 5,
 }: NotificationsPanelProps) {
+  // ═══════════════════════════════════════════════════════════
+  // HOOKS — ordre STABLE
+  // ═══════════════════════════════════════════════════════════
+
+  // 1. Router
   const router = useRouter();
-  const { connected } = useSocket();
+
+  // 2. Socket — récupère `isConnected` (le nom réel)
+  const socketCtx = useSocket();
+  const isConnected = socketCtx?.isConnected ?? false;
+
+  // 3. Notifications
   const {
-    notifications,
+    notifications: rawNotifications,
     loading,
     unreadCount,
     markAsRead,
@@ -129,21 +145,35 @@ export function NotificationsPanel({
     remove,
   } = useNotifications({ fetcher, eventName });
 
+  // 4. États locaux
   const [showAll, setShowAll] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+
+  // ═══════════════════════════════════════════════════════════
+  // SÉCURISATION — Toujours un tableau
+  // ═══════════════════════════════════════════════════════════
+  const notifications = useMemo(
+    () => toArray<Notification>(rawNotifications),
+    [rawNotifications]
+  );
 
   // ─── Filtrage ───
   const filteredNotifications = useMemo(() => {
     if (activeFilter === 'all') return notifications;
-    if (activeFilter === 'unread')
+    if (activeFilter === 'unread') {
       return notifications.filter((n) => !n.read);
+    }
     return notifications.filter((n) => n.type === activeFilter);
   }, [notifications, activeFilter]);
 
   // ─── Limitation ───
-  const displayNotifications = showAll
-    ? filteredNotifications
-    : filteredNotifications.slice(0, collapsedLimit);
+  const displayNotifications = useMemo(
+    () =>
+      showAll
+        ? filteredNotifications
+        : filteredNotifications.slice(0, collapsedLimit),
+    [filteredNotifications, showAll, collapsedLimit]
+  );
 
   // ─── Groupement par date ───
   const groupedNotifications = useMemo(() => {
@@ -156,11 +186,12 @@ export function NotificationsPanel({
     return groups;
   }, [displayNotifications]);
 
-  // ─── Compteurs par filtre ───
+  // ─── Compteurs ───
   const counts = useMemo(() => {
-    const byType: Record<string, number> = { all: notifications.length };
+    const byType: Record<string, number> = {};
     notifications.forEach((n) => {
-      byType[n.type || 'info'] = (byType[n.type || 'info'] || 0) + 1;
+      const key = n.type || 'info';
+      byType[key] = (byType[key] || 0) + 1;
     });
     return {
       all: notifications.length,
@@ -173,7 +204,7 @@ export function NotificationsPanel({
   }, [notifications, unreadCount]);
 
   // ═══════════════════════════════════════════════════════════
-  // LOADING
+  // LOADING (early return — après tous les hooks)
   // ═══════════════════════════════════════════════════════════
   if (loading) {
     return (
@@ -235,27 +266,27 @@ export function NotificationsPanel({
               )}
               {/* Statut socket */}
               <div
-                title={connected ? 'Temps réel actif' : 'Hors ligne'}
+                title={isConnected ? 'Temps réel actif' : 'Hors ligne'}
                 className="ml-1 flex items-center gap-1 rounded-full border border-border/60 bg-background/50 px-1.5 py-0.5"
               >
                 <span
                   className={cn(
                     'h-1.5 w-1.5 rounded-full',
-                    connected
+                    isConnected
                       ? 'bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]'
                       : 'bg-gray-400'
                   )}
-                  aria-label={connected ? 'Connecté' : 'Déconnecté'}
+                  aria-label={isConnected ? 'Connecté' : 'Déconnecté'}
                 />
                 <span
                   className={cn(
                     'text-[9px] font-semibold uppercase tracking-wider',
-                    connected
+                    isConnected
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-muted-foreground'
                   )}
                 >
-                  {connected ? 'Live' : 'Off'}
+                  {isConnected ? 'Live' : 'Off'}
                 </span>
               </div>
             </div>
@@ -282,7 +313,9 @@ export function NotificationsPanel({
                   className="h-7 gap-1 px-2 text-xs"
                   aria-expanded={showAll}
                 >
-                  {showAll ? 'Moins' : `Voir tout (${filteredNotifications.length})`}
+                  {showAll
+                    ? 'Moins'
+                    : `Voir tout (${filteredNotifications.length})`}
                   <ChevronRight
                     className={cn(
                       'h-3 w-3 transition-transform duration-300',
@@ -328,9 +361,7 @@ export function NotificationsPanel({
             <FilterChip
               label="Alertes"
               count={counts.warning + counts.error}
-              active={
-                activeFilter === 'warning' || activeFilter === 'error'
-              }
+              active={activeFilter === 'warning' || activeFilter === 'error'}
               onClick={() => setActiveFilter('warning')}
               variant="warning"
             />
@@ -350,7 +381,7 @@ export function NotificationsPanel({
 
                   return (
                     <div key={groupName}>
-                      {/* ─── Séparateur de groupe ─── */}
+                      {/* Séparateur de groupe */}
                       <div className="sticky top-0 z-10 flex items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur-sm">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                           {groupName}
@@ -361,7 +392,7 @@ export function NotificationsPanel({
                         </span>
                       </div>
 
-                      {/* ─── Items ─── */}
+                      {/* Items */}
                       <div className="divide-y divide-border/30">
                         <AnimatePresence initial={false}>
                           {groupItems.map((notification, index) => (
@@ -369,9 +400,7 @@ export function NotificationsPanel({
                               key={notification.id}
                               notification={notification}
                               index={index}
-                              onMarkAsRead={() =>
-                                markAsRead(notification.id)
-                              }
+                              onMarkAsRead={() => markAsRead(notification.id)}
                               onRemove={() => remove(notification.id)}
                               onNavigate={(link) => router.push(link)}
                             />
@@ -426,30 +455,25 @@ function FilterChip({
 }) {
   const variants = {
     default: {
-      active:
-        'bg-foreground text-background border-foreground shadow-sm',
+      active: 'bg-foreground text-background border-foreground shadow-sm',
       inactive: 'hover:bg-muted/60 text-muted-foreground',
     },
     primary: {
-      active:
-        'bg-primary text-primary-foreground border-primary shadow-sm',
+      active: 'bg-primary text-primary-foreground border-primary shadow-sm',
       inactive: 'hover:bg-primary/10 text-primary',
     },
     success: {
-      active:
-        'bg-emerald-500 text-white border-emerald-500 shadow-sm',
+      active: 'bg-emerald-500 text-white border-emerald-500 shadow-sm',
       inactive:
         'hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
     },
     warning: {
       active: 'bg-amber-500 text-white border-amber-500 shadow-sm',
-      inactive:
-        'hover:bg-amber-500/10 text-amber-600 dark:text-amber-400',
+      inactive: 'hover:bg-amber-500/10 text-amber-600 dark:text-amber-400',
     },
     info: {
       active: 'bg-blue-500 text-white border-blue-500 shadow-sm',
-      inactive:
-        'hover:bg-blue-500/10 text-blue-600 dark:text-blue-400',
+      inactive: 'hover:bg-blue-500/10 text-blue-600 dark:text-blue-400',
     },
   };
 
@@ -469,9 +493,7 @@ function FilterChip({
         <span
           className={cn(
             'rounded-full px-1 text-[9px] font-bold tabular-nums',
-            active
-              ? 'bg-white/20'
-              : 'bg-muted-foreground/20'
+            active ? 'bg-white/20' : 'bg-muted-foreground/20'
           )}
         >
           {count > 99 ? '99+' : count}
@@ -509,9 +531,7 @@ function NotificationItem({
       transition={{ delay: index * 0.03 }}
       className={cn(
         'group relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors',
-        isUnread
-          ? 'bg-secondary/5 hover:bg-secondary/10'
-          : 'hover:bg-muted/40'
+        isUnread ? 'bg-secondary/5 hover:bg-secondary/10' : 'hover:bg-muted/40'
       )}
       onClick={() => {
         if (isUnread) onMarkAsRead();
@@ -527,18 +547,18 @@ function NotificationItem({
         }
       }}
     >
-      {/* ─── Barre d'accent latérale ─── */}
+      {/* Barre d'accent */}
       {isUnread && (
         <span
           className={cn(
-            'absolute left-0 top-2 bottom-2 w-0.5 rounded-r-full',
+            'absolute bottom-2 left-0 top-2 w-0.5 rounded-r-full',
             config.accentBar
           )}
           aria-hidden="true"
         />
       )}
 
-      {/* ─── Icône / Avatar ─── */}
+      {/* Icône */}
       <div className="relative shrink-0">
         <div
           className={cn(
@@ -559,7 +579,7 @@ function NotificationItem({
         {isUnread && (
           <span
             className={cn(
-              'absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-background animate-pulse',
+              'absolute -right-0.5 -top-0.5 h-2.5 w-2.5 animate-pulse rounded-full ring-2 ring-background',
               config.dot
             )}
             aria-label="Non lue"
@@ -567,7 +587,7 @@ function NotificationItem({
         )}
       </div>
 
-      {/* ─── Contenu ─── */}
+      {/* Contenu */}
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex items-start justify-between gap-2">
           <p
@@ -580,7 +600,6 @@ function NotificationItem({
           >
             {notification.title}
           </p>
-          {/* Bouton supprimer */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -621,30 +640,18 @@ function NotificationItem({
 // ─── État vide ───
 function EmptyNotifications({ filter }: { filter: FilterType }) {
   const messages: Record<FilterType, { title: string; subtitle: string }> = {
-    all: {
-      title: 'Aucune notification',
-      subtitle: 'Vous êtes à jour !',
-    },
+    all: { title: 'Aucune notification', subtitle: 'Vous êtes à jour !' },
     unread: {
       title: 'Aucune notification non lue',
       subtitle: 'Tout est déjà traité',
     },
-    info: {
-      title: 'Aucune information',
-      subtitle: 'Rien à signaler',
-    },
+    info: { title: 'Aucune information', subtitle: 'Rien à signaler' },
     success: {
       title: 'Aucun succès',
       subtitle: 'Les bonnes nouvelles arrivent bientôt',
     },
-    warning: {
-      title: 'Aucun avertissement',
-      subtitle: 'Tout va bien',
-    },
-    error: {
-      title: 'Aucune erreur',
-      subtitle: 'Aucun problème détecté',
-    },
+    warning: { title: 'Aucun avertissement', subtitle: 'Tout va bien' },
+    error: { title: 'Aucune erreur', subtitle: 'Aucun problème détecté' },
   };
 
   const msg = messages[filter] || messages.all;
@@ -667,7 +674,6 @@ function EmptyNotifications({ filter }: { filter: FilterType }) {
             <BellOff className="h-8 w-8 text-muted-foreground/60" />
           </div>
         )}
-        {/* Décoration sparkle */}
         <Sparkles className="absolute -right-1 -top-1 h-4 w-4 text-amber-400 opacity-70" />
       </motion.div>
 
