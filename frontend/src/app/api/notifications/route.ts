@@ -14,6 +14,24 @@ function getToken(request: NextRequest): string | null {
   );
 }
 
+// ✅ Normalise TOUJOURS en tableau
+function normalizeToArray(raw: any): any[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'object') {
+    if (Array.isArray(raw.data)) return raw.data;
+    if (Array.isArray(raw.notifications)) return raw.notifications;
+    if (Array.isArray(raw.items)) return raw.items;
+    if (Array.isArray(raw.results)) return raw.results;
+    if (raw.data && typeof raw.data === 'object') {
+      if (Array.isArray(raw.data.notifications)) return raw.data.notifications;
+      if (Array.isArray(raw.data.items)) return raw.data.items;
+      if (Array.isArray(raw.data.results)) return raw.data.results;
+    }
+  }
+  return [];
+}
+
 export async function GET(request: NextRequest) {
   const token = getToken(request);
 
@@ -23,6 +41,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log('[api/notifications] → Fetch backend...');
     const res = await fetch(
       `${BACKEND_URL}/notifications/my-notifications`,
       {
@@ -34,46 +53,31 @@ export async function GET(request: NextRequest) {
       }
     );
 
+    console.log('[api/notifications] ← Backend status:', res.status);
+
     if (!res.ok) {
-      console.warn(`[api/notifications] Backend ${res.status}`);
       return NextResponse.json([]);
     }
 
     const raw = await res.json();
+    const data = normalizeToArray(raw);
 
-    // ✅ TOUJOURS renvoyer un tableau
-    let data: unknown[] = [];
-
-    if (Array.isArray(raw)) {
-      data = raw;
-    } else if (raw && typeof raw === 'object') {
-      const obj = raw as any;
-      if (Array.isArray(obj.data)) data = obj.data;
-      else if (Array.isArray(obj.notifications)) data = obj.notifications;
-      else if (Array.isArray(obj.items)) data = obj.items;
-      else if (obj.data && Array.isArray(obj.data.notifications))
-        data = obj.data.notifications;
-      else if (obj.data && Array.isArray(obj.data.items))
-        data = obj.data.items;
-    }
-
+    console.log('[api/notifications] ✅ Retour:', data.length, 'items');
     return NextResponse.json(data);
   } catch (err) {
-    console.error('[api/notifications] Erreur:', err);
+    console.error('[api/notifications] ❌ Erreur:', err);
     return NextResponse.json([]);
   }
 }
 
 export async function POST(request: NextRequest) {
   const token = getToken(request);
-
   if (!token) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
   }
 
   try {
     const body = await request.json();
-
     const res = await fetch(`${BACKEND_URL}/notifications/admin`, {
       method: 'POST',
       headers: {
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
-    console.error('[api/notifications POST] Erreur:', err);
+    console.error('[api/notifications POST]', err);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }
