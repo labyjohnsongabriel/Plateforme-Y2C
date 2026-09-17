@@ -454,4 +454,55 @@ export const exportApi = {
     api.get(`/export/articles/${format}`, { params, responseType: 'blob' }),
 };
 
+// ─── Notifications ───────────────────────────────────────────────
+export const notifications = {
+  /**
+   * Récupère les notifications de l'utilisateur connecté
+   * GET /api/notifications/my-notifications
+   */
+  getMy: (params?: { page?: number; limit?: number }) =>
+    api.get('/notifications/my-notifications', { params }),
+
+  /**
+   * Récupère toutes les notifications (admin)
+   */
+  getAll: (params?: any) => api.get('/notifications', { params }),
+
+  /**
+   * Nombre de notifications non lues
+   */
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+
+  /**
+   * Marquer une notification comme lue
+   */
+  markAsRead: (id: string) => api.put(`/notifications/${id}/read`),
+
+  /**
+   * Marquer TOUTES les notifications comme lues
+   */
+  markAllAsRead: () => api.put('/notifications/read-all'),
+
+  /**
+   * Supprimer une notification
+   */
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+
+  /**
+   * Créer une notification (admin)
+   */
+  create: (data: {
+    userId?: string;
+    title: string;
+    message: string;
+    type?: 'info' | 'success' | 'warning' | 'error';
+    link?: string;
+  }) => api.post('/notifications/admin', data),
+
+  /**
+   * Supprimer n'importe quelle notification (admin)
+   */
+  deleteAdmin: (id: string) => api.delete(`/notifications/admin/${id}`),
+};
+
 export default api;
