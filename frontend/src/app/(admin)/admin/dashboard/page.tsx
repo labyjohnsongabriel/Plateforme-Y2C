@@ -1,7 +1,7 @@
 // src/app/(admin)/admin/dashboard/page.tsx
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { PageTransition } from '@/components/shared/PageTransition';
 import { StatsOverview } from './components/StatsOverview';
 import { ChartsSection } from './components/ChartsSection';
@@ -19,31 +19,42 @@ import {
   BarChart3,
   ListChecks,
   Clock,
+  CheckCircle2,
+  Wifi,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import type { Notification } from '@/hooks/useNotifications';
 
 // ============================================================
-// COMPOSANT — Section Header réutilisable
+// TYPES
 // ============================================================
+type BadgeColor = 'primary' | 'secondary' | 'amber' | 'emerald';
+
 interface SectionHeaderProps {
   icon: React.ReactNode;
   title: string;
   subtitle?: string;
   badge?: string;
-  badgeColor?: 'primary' | 'secondary' | 'amber' | 'emerald';
+  badgeColor?: BadgeColor;
   iconBg?: string;
   action?: React.ReactNode;
 }
 
-const BADGE_COLORS = {
+// ============================================================
+// CONSTANTES
+// ============================================================
+const BADGE_COLORS: Record<BadgeColor, string> = {
   primary: 'text-primary',
   secondary: 'text-secondary',
   amber: 'text-amber-600 dark:text-amber-400',
   emerald: 'text-emerald-600 dark:text-emerald-400',
-} as const;
+};
 
+// ============================================================
+// SOUS-COMPOSANT — SectionHeader
+// ============================================================
 function SectionHeader({
   icon,
   title,
@@ -92,20 +103,35 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const { stats, loading, error, refetch } = useDashboardStats();
 
-  // ─── Fetcher REST pour les notifications (fallback socket) ───
-  const fetchNotifications = useCallback(async () => {
+  // ✅ État local pour éviter le double-clic
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // ─── Fetcher REST notifications (fallback socket) ───
+  const fetchNotifications = useCallback(async (): Promise<Notification[]> => {
     try {
       const res = await fetch('/api/notifications', {
         credentials: 'include',
       });
       if (!res.ok) return [];
-      return res.json();
-    } catch {
+
+      const raw = await res.json();
+
+      // ✅ Normalise toujours en tableau
+      if (Array.isArray(raw)) return raw;
+      if (raw && typeof raw === 'object') {
+        if (Array.isArray(raw.data)) return raw.data;
+        if (Array.isArray(raw.notifications)) return raw.notifications;
+        if (raw.data && Array.isArray(raw.data.notifications))
+          return raw.data.notifications;
+      }
+      return [];
+    } catch (err) {
+      console.error('[fetchNotifications]', err);
       return [];
     }
   }, []);
 
-  // ─── Label horaire (Bonjour/Bonsoir) ───
+  // ─── Greeting stable (calculé une fois) ───
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Bonjour';
@@ -114,6 +140,39 @@ export default function DashboardPage() {
   }, []);
 
   const userName = user?.firstName || 'Utilisateur';
+
+  // ─── Refetch avec état ───
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      // Petit délai pour le feedback visuel
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  }, [isRefreshing, refetch]);
+
+  // ─── Error normalisée ───
+  const errorMessage = useMemo(() => {
+    if (!error) return null;
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    return 'Une erreur est survenue';
+  }, [error]);
+
+  // ─── Timestamp stable pour la session ───
+  const lastUpdate = useMemo(
+    () =>
+      new Date().toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    // Se recalcule quand les stats changent
+    [stats]
+  );
+
+  const isBusy = loading || isRefreshing;
 
   return (
     <ProtectedRoute roles={['ADMIN', 'SUPER_ADMIN']} showError>
@@ -137,7 +196,8 @@ export default function DashboardPage() {
                   <h1 className="font-ubuntu text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                     Tableau de bord
                   </h1>
-                  <span className="hidden rounded-full border border-emerald-200/60 bg-emerald-50/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 sm:inline dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-400">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/60 bg-emerald-50/80 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-400">
+                    <Wifi className="h-2.5 w-2.5" />
                     Live
                   </span>
                 </div>
@@ -154,14 +214,19 @@ export default function DashboardPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => refetch()}
-              disabled={loading}
+              onClick={handleRefresh}
+              disabled={isBusy}
               className="gap-2 border-primary/20 bg-primary/5 transition-all duration-300 hover:border-primary/40 hover:bg-primary/10"
             >
               <RefreshCw
-                className={cn('h-3.5 w-3.5', loading && 'animate-spin')}
+                className={cn(
+                  'h-3.5 w-3.5',
+                  isBusy && 'animate-spin'
+                )}
               />
-              <span className="hidden sm:inline">Actualiser</span>
+              <span className="hidden sm:inline">
+                {isRefreshing ? 'Actualisation...' : 'Actualiser'}
+              </span>
               <span className="sm:hidden">Actu.</span>
             </Button>
           </motion.div>
@@ -169,7 +234,7 @@ export default function DashboardPage() {
           {/* ═══════════════════════════════════════════════════════
               ERREUR
              ═══════════════════════════════════════════════════════ */}
-          {error && (
+          {errorMessage && (
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -178,8 +243,23 @@ export default function DashboardPage() {
             >
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent" />
               <div className="relative flex items-start gap-3">
-                <span className="mt-0.5 text-red-500">⚠️</span>
-                <p className="font-medium">{error}</p>
+                <span className="mt-0.5 text-lg leading-none">⚠️</span>
+                <div className="flex-1">
+                  <p className="font-semibold">Erreur de chargement</p>
+                  <p className="mt-0.5 text-xs opacity-90">{errorMessage}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isBusy}
+                  className="h-7 gap-1 px-2 text-xs text-red-700 hover:bg-red-100/50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-900/30"
+                >
+                  <RefreshCw
+                    className={cn('h-3 w-3', isBusy && 'animate-spin')}
+                  />
+                  Réessayer
+                </Button>
               </div>
             </motion.div>
           )}
@@ -209,7 +289,7 @@ export default function DashboardPage() {
             )}
 
           {/* ═══════════════════════════════════════════════════════
-              2. VUE D'ENSEMBLE (StatsOverview groupée)
+              2. VUE D'ENSEMBLE (StatsOverview)
              ═══════════════════════════════════════════════════════ */}
           <motion.section
             initial={{ opacity: 0, y: 10 }}
@@ -261,8 +341,7 @@ export default function DashboardPage() {
                 stats={{
                   chartData: stats?.chartData,
                   roleData: stats?.roleData,
-                  // ⚠️ summary volontairement omis pour éviter les doublons
-                  //    (StatsOverview gère déjà toutes les cartes)
+                  // ⚠️ summary volontairement omis (StatsOverview gère les cartes)
                 }}
                 loading={loading}
               />
@@ -283,27 +362,34 @@ export default function DashboardPage() {
                   iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 />
 
-                {/* ⚡ Notifications temps réel (socket + fallback REST) */}
+                {/* ⚡ Notifications temps réel */}
                 <NotificationsPanel fetcher={fetchNotifications} />
 
-                {/* 📋 Activités récentes (limitées à 5) */}
+                {/* 📋 Activités récentes (5 dernières) */}
                 <RecentActivities
                   activities={stats?.activities || []}
                   loading={loading}
                   limit={5}
                 />
 
-                {/* 🕐 Timestamp du dernier refresh */}
-                <div className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+                {/* 🕐 Timestamp */}
+                <div className="flex items-center justify-center gap-1.5 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   <span>
                     Dernière mise à jour :{' '}
-                    {new Date().toLocaleTimeString('fr-FR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    <span className="font-medium text-foreground">
+                      {lastUpdate}
+                    </span>
                   </span>
                 </div>
+
+                {/* ✅ Indicateur de santé */}
+                {!error && !loading && (
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>Système opérationnel</span>
+                  </div>
+                )}
               </section>
             </div>
           </motion.div>
