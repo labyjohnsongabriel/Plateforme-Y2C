@@ -5,13 +5,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion, useInView, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  ArrowUp,
-  ArrowDown,
-  Minus,
-  Sparkles,
-  TrendingUp,
-} from 'lucide-react';
+import { ArrowUp, ArrowDown, Minus, Sparkles } from 'lucide-react';
 
 // ============================================================
 // TYPES
@@ -49,12 +43,11 @@ export interface StatCardProps {
   progress?: number;
   isNew?: boolean;
   breakdown?: BreakdownItem[];
-  /** Rend la card cliquable (ex: redirection) */
   onClick?: () => void;
 }
 
 // ============================================================
-// PALETTE PREMIUM — Couleurs + gradients + halos
+// PALETTE PREMIUM
 // ============================================================
 interface ColorScheme {
   iconBg: string;
@@ -71,7 +64,7 @@ interface ColorScheme {
 
 const COLOR_SCHEMES: Record<StatColor, ColorScheme> = {
   primary: {
-    iconBg: 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary-foreground',
+    iconBg: 'bg-primary/10 text-primary dark:bg-primary/15',
     iconRing: 'ring-primary/20',
     glow: 'from-primary/15 via-primary/5 to-transparent',
     spark: '#010B40',
@@ -123,8 +116,7 @@ const COLOR_SCHEMES: Record<StatColor, ColorScheme> = {
     cornerAccent: 'bg-amber-500/40',
   },
   danger: {
-    iconBg:
-      'bg-red-500/10 text-red-600 dark:bg-red-500/15 dark:text-red-400',
+    iconBg: 'bg-red-500/10 text-red-600 dark:bg-red-500/15 dark:text-red-400',
     iconRing: 'ring-red-500/20',
     glow: 'from-red-500/15 via-red-500/5 to-transparent',
     spark: '#ef4444',
@@ -153,8 +145,17 @@ const COLOR_SCHEMES: Record<StatColor, ColorScheme> = {
 };
 
 // ============================================================
-// SPARKLINE PREMIUM — Aire + point actif + animation
+// SPARKLINE
 // ============================================================
+interface SparklineProps {
+  data: number[];
+  color: string;
+  gradient: [string, string];
+  gradientId: string;
+  isInView: boolean;
+  delay?: number;
+}
+
 function Sparkline({
   data,
   color,
@@ -162,14 +163,7 @@ function Sparkline({
   gradientId,
   isInView,
   delay = 0,
-}: {
-  data: number[];
-  color: string;
-  gradient: [string, string];
-  gradientId: string;
-  isInView: boolean;
-  delay?: number;
-}) {
+}: SparklineProps) {
   if (!data || data.length < 2) return null;
 
   const width = 120;
@@ -205,16 +199,14 @@ function Sparkline({
         </linearGradient>
       </defs>
 
-      {/* Aire de fond */}
       <motion.path
         d={areaD}
         fill={`url(#${gradientId})`}
         initial={{ opacity: 0 }}
-        animate={isInView ? { opacity: 1 } : {}}
+        animate={isInView ? { opacity: 1 } : { opacity: 1 }}
         transition={{ duration: 0.6, delay: delay + 0.4 }}
       />
 
-      {/* Ligne animée */}
       <motion.path
         d={pathD}
         fill="none"
@@ -224,11 +216,10 @@ function Sparkline({
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
         initial={{ pathLength: 0 }}
-        animate={isInView ? { pathLength: 1 } : {}}
+        animate={isInView ? { pathLength: 1 } : { pathLength: 1 }}
         transition={{ duration: 1, delay: delay + 0.2, ease: 'easeOut' }}
       />
 
-      {/* Point final (dernier point) */}
       <motion.circle
         cx={lastPoint.x}
         cy={lastPoint.y}
@@ -237,7 +228,7 @@ function Sparkline({
         stroke="hsl(var(--background))"
         strokeWidth={2}
         initial={{ scale: 0, opacity: 0 }}
-        animate={isInView ? { scale: 1, opacity: 1 } : {}}
+        animate={isInView ? { scale: 1, opacity: 1 } : { scale: 1, opacity: 1 }}
         transition={{ duration: 0.4, delay: delay + 1.1 }}
         style={{ transformOrigin: `${lastPoint.x}px ${lastPoint.y}px` }}
       />
@@ -246,7 +237,7 @@ function Sparkline({
 }
 
 // ============================================================
-// HOOK — Compteur animé (rAF + easing outExpo)
+// HOOK — Compteur animé
 // ============================================================
 function useAnimatedCount(
   target: number | string,
@@ -268,17 +259,20 @@ function useAnimatedCount(
     }
 
     const duration = 900;
+    const from = 0;
+    const to = target;
     const start = performance.now();
 
     const tick = (now: number) => {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
       const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setDisplay(Math.floor(target * eased));
+      setDisplay(Math.floor(from + (to - from) * eased));
+
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
-        setDisplay(target);
+        setDisplay(to);
       }
     };
 
@@ -293,7 +287,7 @@ function useAnimatedCount(
 }
 
 // ============================================================
-// COMPOSANT PRINCIPAL
+// COMPOSANT PRINCIPAL — ✅ TOUJOURS VISIBLE
 // ============================================================
 export function StatCard({
   title,
@@ -317,15 +311,28 @@ export function StatCard({
   onClick,
 }: StatCardProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const isInView = useInView(ref, { once: true, margin: '-20px' });
+
+  // ✅ FIX 1 : option permissive (amount au lieu de margin)
+  const isInView = useInView(ref, { once: true, amount: 0.01 });
+
+  // ✅ FIX 2 : force la visibilité après 300ms (fallback garanti)
+  const [forceVisible, setForceVisible] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setForceVisible(true), 300);
+    return () => clearTimeout(t);
+  }, []);
+
+  // ✅ FIX 3 : la visibilité = isInView OU forceVisible
+  const shouldAnimate = isInView || forceVisible;
+
   const gradientId = useId().replace(/:/g, '-');
   const scheme = COLOR_SCHEMES[color];
 
   const isNumeric = typeof value === 'number';
-  const animatedCount = useAnimatedCount(value, isInView && !loading);
+  const animatedCount = useAnimatedCount(value, shouldAnimate && !loading);
   const isInteractive = !!onClick;
 
-  // ─── Formatage ───
+  // ─── Formatage mémoïsé ───
   const formatValue = useMemo(
     () =>
       (val: number | string): string => {
@@ -397,27 +404,39 @@ export function StatCard({
       ? formatValue(animatedCount)
       : formatValue(value);
 
-  // ─── Classes dynamiques ───
-  const Wrapper = isInteractive ? motion.button : motion.div;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!isInteractive) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onClick?.();
+    }
+  };
 
   return (
-    <Wrapper
-      ref={ref as any}
-      type={isInteractive ? 'button' : undefined}
+    <motion.div
+      ref={ref}
       onClick={onClick}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={handleKeyDown}
+      aria-label={isInteractive ? `${title} : ${displayValue}` : undefined}
+      // ✅ FIX 4 : animation initial → animate avec fallback toujours visible
       initial={{ opacity: 0, y: 20 }}
-      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      animate={
+        shouldAnimate
+          ? { opacity: 1, y: 0 }
+          : { opacity: 1, y: 0 } // ← Toujours visible même si non animé
+      }
       transition={{ duration: 0.4, delay: delay * 0.06, ease: 'easeOut' }}
       whileHover={isInteractive ? { y: -2 } : undefined}
       whileTap={isInteractive ? { scale: 0.99 } : undefined}
       className={cn(
-        // Base
         'group relative w-full overflow-hidden rounded-2xl border border-border/60 bg-card',
         'text-left shadow-sm transition-all duration-300',
-        // Hover
         'hover:-translate-y-0.5 hover:border-border hover:shadow-lg',
-        // Focus (accessibilité clavier)
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        isInteractive && 'cursor-pointer',
+        isInteractive &&
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
     >
@@ -532,7 +551,7 @@ export function StatCard({
               color={scheme.spark}
               gradient={scheme.sparkGradient}
               gradientId={`spark-${gradientId}`}
-              isInView={isInView}
+              isInView={shouldAnimate}
               delay={delay * 0.06}
             />
           </div>
@@ -558,25 +577,23 @@ export function StatCard({
             >
               <motion.div
                 initial={{ width: 0 }}
-                animate={
-                  isInView
-                    ? { width: `${Math.min(progress, 100)}%` }
-                    : { width: 0 }
-                }
+                animate={{
+                  // ✅ FIX : toujours animé
+                  width: `${Math.min(progress, 100)}%`,
+                }}
                 transition={{
                   duration: 1,
                   delay: delay * 0.06 + 0.3,
                   ease: 'easeOut',
                 }}
                 className={cn(
-                  'relative h-full rounded-full',
+                  'relative h-full overflow-hidden rounded-full',
                   scheme.progress,
                   scheme.progressGlow
                 )}
               >
-                {/* Shimmer */}
                 <div
-                  className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent"
+                  className="pointer-events-none absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent"
                   aria-hidden="true"
                 />
               </motion.div>
@@ -624,6 +641,6 @@ export function StatCard({
         )}
         aria-hidden="true"
       />
-    </Wrapper>
+    </motion.div>
   );
 }
